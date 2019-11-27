@@ -41,6 +41,7 @@ function [ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexCost,VertexDelay,Vert
     AllConnected = 1;
     for i = 1:affectedNum
         am = AM_{ClusterIdx(1),ClusterIdx(2)};
+        %若节点的度为1，则其退出不会对其它结点有影响
         isConnected = CheckConnected(am,affectedNodes(i),nodeIdx);
         %调试代码
         fprintf('affectedNode = %d,isConnected=%d\n',affectedNodes(i),isConnected);
@@ -138,14 +139,15 @@ end
 function [Connected,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay]...
     = OldNodeJoin(affectedNodes,ClusterMatrix_,ClusterIdx,affectedNodeIdx,affectedNodePos,nodeIdx,AM_,...
         EdgeCost_,EdgeDelay_,EdgeBW_,VertexDelay_,EdgeCostDUB,EdgeBWDUB,VertexDelayDUB)
-%% 从退出节点的相邻节点中选择相连的节点
+%% 从退出节点的相邻节点中选择距离最近的节点相连
 
-    %选择nodeIdx的邻结点相连
+    %选择与nodeIdx最近的邻结点相连
+    sortedNodes = SortNodesByDistance(0,affectedNodePos,ClusterMatrix_,ClusterIdx,affectedNodes);
     am = AM_{ClusterIdx(1),ClusterIdx(2)};
-    affectedNum = size(affectedNodes,2);
+    affectedNum = size(sortedNodes,2);
     Connected = 0;
     for i = 1:affectedNum
-        linkIdx = affectedNodes(i);
+        linkIdx = sortedNodes(i);
         if linkIdx ~= affectedNodeIdx && am(affectedNodeIdx,linkIdx) == 0
             am(affectedNodeIdx,linkIdx) = 1;
             am(linkIdx,affectedNodeIdx) = 1;
@@ -217,48 +219,68 @@ end
 function [AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay] = ...
         ConnectNodeIdxAllAdj(ClusterMatrix_,ClusterIdx,affectedNodes,AM_,EdgeCost_,EdgeDelay_,...
         EdgeBW_,VertexDelay_,EdgeCostDUB,EdgeBWDUB,VertexDelayDUB)
-%%将affectedNodes首尾互连
-
+%%将affectedNodes按其横坐标排序，然后首尾互连
     affectedNum = size(affectedNodes,2);
     Cluster = ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)};
+    
+    affectedNodesWithX = zeros(2,affectedNum);
+    for i = 1:affectedNum
+        affectedNodesWithX(:,i) = Cluster(1:2,affectedNodes(i));
+    end
+    X = affectedNodesWithX(2,:);
+    sorted_X = sort(X);
+    sortedAffectedNodes = zeros(1,affectedNum);
+    for i = 1:affectedNum
+        pos = find(X==sorted_X(i));
+        sortedAffectedNodes(i) = affectedNodesWithX(1,pos);
+    end
+    
+    %调试
+    fprintf('==============ConnectNodeIdxAllAdj---sortedAffectedNodes===============\n');
+    for i = 1:affectedNum
+        fprintf('%d\t',sortedAffectedNodes(i));
+    end
+    fprintf('\n===================================================================\n');
+    
     am = AM_{ClusterIdx(1),ClusterIdx(2)};
     edgeCost = EdgeCost_{ClusterIdx(1),ClusterIdx(2)};
     edgeDelay = EdgeDelay_{ClusterIdx(1),ClusterIdx(2)};
     edgeBW = EdgeBW_{ClusterIdx(1),ClusterIdx(2)};
     vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
-    node = affectedNodes(1);
+    node = sortedAffectedNodes(1);
     for i = 2:affectedNum
         %只处理不互连的结点
-        if am(node,affectedNodes(i)) == 0
+        nextNode = sortedAffectedNodes(i);
+        if am(node,nextNode) == 0
             %更新AM_
-            am(node,affectedNodes(i)) = 1;
-            am(affectedNodes(i),node) = 1;
+            am(node,nextNode) = 1;
+            am(nextNode,node) = 1;
 
             %更新EdgeCost
             %TODO应有公式
             NewEdgeCost = EdgeCostDUB(1)+(EdgeCostDUB(2)-EdgeCostDUB(1))*rand;
-            edgeCost(node,affectedNodes(i)) = NewEdgeCost;
-            edgeCost(affectedNodes(i),node) = edgeCost(node,affectedNodes(i));           
+            edgeCost(node,nextNode) = NewEdgeCost;
+            edgeCost(nextNode,node) = edgeCost(node,nextNode);           
 
             %更新EdgeDelay
             nodePos = Cluster(:,node);
-            nextNodePos = Cluster(:,affectedNodes(i));
+            nextNodePos = Cluster(:,nextNode);
             Distance = ( (nodePos(2)-nextNodePos(2))^2 +...
                             (nodePos(3)-nextNodePos(3))^2)^0.5;
             NewEdgeDelay = 0.5*Distance/100000;
-            edgeDelay(node,affectedNodes(i)) = NewEdgeDelay;
-            edgeDelay(affectedNodes(i),node) = edgeDelay(node,affectedNodes(i));
+            edgeDelay(node,nextNode) = NewEdgeDelay;
+            edgeDelay(nextNode,node) = edgeDelay(node,nextNode);
 
             %更新EdgeBw
             NewEdgeBW = EdgeBWDUB(1)+(EdgeBWDUB(2)-EdgeBWDUB(1))*rand;
-            edgeBW(node,affectedNodes(i)) = NewEdgeBW;
-            edgeBW(affectedNodes(i),node) = edgeBW(node,affectedNodes(i));
+            edgeBW(node,nextNode) = NewEdgeBW;
+            edgeBW(nextNode,node) = edgeBW(node,nextNode);
                       
             %更新VertexDelay
             NewVertexDelay = VertexDelayDUB(1)+(VertexDelayDUB(2)-VertexDelayDUB(1))*rand;
             vertexDelay(node) = NewVertexDelay;        
         end
-        node = affectedNodes(i);
+        node = nextNode;
     end
     
     %调试
@@ -339,8 +361,9 @@ function [ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexCost,VertexDelay,Vert
     ClusterMatrix_{row,col} = ClusterIn;
     ClusterMatrix = ClusterMatrix_;
 
-    %随机选择某个节点搭建链路
-    linkIdx = randperm(nodesIn,1);
+    %选择距离最近的节点搭建链路
+    sortedNodes = SortNodesByDistance(1,nodePos,ClusterMatrix_,[row,col],[1:nodesIn]);
+    linkIdx = sortedNodes(1);
     linkNode = ClusterIn(:,linkIdx);
 
     %更新AM
@@ -414,4 +437,36 @@ function [ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexCost,VertexDelay,Vert
     VertexPacketLoss = VertexPacketLoss_;   
 end
 
-
+function [sortedNodes] = SortNodesByDistance(NotIn,targetNodePos,ClusterMatrix_,ClusterIdx,nodes)
+%% 将nodes中的节点按照与targeNode的距离升序排序
+%NotIn用于指示targeNodePos是否有可能被nodes包含，1表示没有可能
+    Cluster = ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)};
+    nodeNum = size(nodes,2);
+    nodesWithD = [];
+    for i = 1:nodeNum
+        if NotIn == 1 || targetNodePos(1) ~= nodes(i)
+            distance = ( (targetNodePos(2)-Cluster(2,nodes(i)))^2 +...
+                        (targetNodePos(3)-Cluster(3,nodes(i)))^2)^0.5;
+            nodesWithD = [nodesWithD,[nodes(i),distance]'];
+        end
+    end
+    sortedNodes = [];
+    %nodes可能包含targeNode，因此需要重新size
+    nodeNum = size(nodesWithD,2);
+    if nodeNum > 0
+        distanceRow = nodesWithD(2,:);
+        sortedNodesWithD = sort(distanceRow);
+        sortedNodes = zeros(1,nodeNum);
+        for i = 1:nodeNum
+            pos = find(distanceRow==sortedNodesWithD(i));
+            sortedNodes(i) = nodesWithD(1,pos);
+        end
+    end
+        
+    %调试
+    fprintf('============================SortNodesByDistance======================\n');
+    for i = 1:nodeNum
+        fprintf('%d\t',sortedNodes(i));
+    end
+    fprintf('\n===================================================================\n');
+end
