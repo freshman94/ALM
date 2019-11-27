@@ -49,7 +49,7 @@ ColCnt = floor(Clusters / RowCnt);
 ClusterMatrix = cell(RowCnt,ColCnt);
 RowBase = 10/RowCnt;
 ColBase = 10/ColCnt;
-VDTime = [10,30]; %速度和方向更新间隔时间 TODO实际设为[60,300]
+VDTime = [5,10]; %速度和方向更新间隔时间 TODO实际设为[60,300]
 vdTime = VDTime(1) + (VDTime(2) - VDTime(1)) * rand;
 %绘制动图参数
 pic_num = 1;
@@ -79,7 +79,6 @@ if PlotIf == 1
 end
 
  %输出参数初始化（胞元数组）
-% global AM, EdgeCost,EdgeDelay,EdgeBW,VertexCost,VertexDelay,VertexPacketLoss;
 AM = cell(RowCnt,ColCnt);
 EdgeCost = cell(RowCnt,ColCnt);
 EdgeDelay = cell(RowCnt,ColCnt);
@@ -94,8 +93,8 @@ t_vd = clock;
 
 %分簇
 for i = 1:NodeAmount
-    row = max(ceil(10 * Sxy(3,i)/(BorderLength*RowBase)),1);
-    col = max(ceil(10 * Sxy(2,i)/(BorderLength * ColBase)),1);
+    row = min(max(ceil(10 * Sxy(3,i)/(BorderLength*RowBase)),1),RowCnt);
+    col = min(max(ceil(10 * Sxy(2,i)/(BorderLength * ColBase)),1),ColCnt);
     ClusterMatrix{row,col} = [ClusterMatrix{row,col},[Sxy(2,i),Sxy(3,i),Sxy(4,i),Sxy(5,i)]'];   
 end
 
@@ -182,7 +181,7 @@ for i = 1:RowCnt
         VertexDelay{i,j} = vertexDelay;
         VertexPacketLoss{i,j} = vertexPacketLoss;
 
-        Net_plot(BorderLength,nodes,Cluster,EdgeCost{i,j},PlotIf);
+        Net_plot(BorderLength,nodes,Cluster,AM{i,j},PlotIf);
     end
 end
 
@@ -196,35 +195,32 @@ while true
             nodes = size(Cluster,2);
             k = 1;
             while k <= nodes
-                fprintf('k = %d nodes = %d\n',k,nodes);
                 Cluster(2,k) = Cluster(2,k) + Cluster(4,k)*cos(Cluster(5,k))*t_posDiff;
                 Cluster(3,k) = Cluster(3,k) + Cluster(4,k)*sin(Cluster(5,k))*t_posDiff;
                 %节点坐标越界
                 if Cluster(2,k) < 0
-                    Cluster(2,k) = 0;
+                    Cluster(2,k) = BorderLength * 0.1;
                 elseif Cluster(2,k) > BorderLength
-                     Cluster(2,k) = BorderLength;
+                     Cluster(2,k) = BorderLength * 0.9;
                 end
                 if Cluster(3,k) < 0
-                    Cluster(3,k) = 0;
+                    Cluster(3,k) = BorderLength * 0.1;
                 elseif Cluster(3,k) > BorderLength
-                    Cluster(3,k) = BorderLength;
+                    Cluster(3,k) = BorderLength * 0.9;
                 end
                 %节点移动至其它簇(节点加入与退出）
-                row = max(ceil(10 * Cluster(3,k)/(BorderLength*RowBase)),1);
-                col = max(ceil(10 * Cluster(2,k)/(BorderLength*ColBase)),1);
+                row = min(max(ceil(10 * Cluster(3,k)/(BorderLength*RowBase)),1),RowCnt);
+                col = min(max(ceil(10 * Cluster(2,k)/(BorderLength*ColBase)),1),ColCnt);
                 if (row ~= i) || (col ~= j)
-%                     fprintf('row = %d i = %d col = %d j = %d\n',row,i,col,j);
                     [ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexCost,...
                         VertexDelay,VertexPacketLoss] = ...
                         VertexOutAndIn(ClusterMatrix,[i,j],k,Cluster(:,k),AM,...
                     EdgeCost,EdgeDelay,EdgeBW,VertexCost,VertexDelay,...
-                    VertexPacketLoss,BorderLength,RowBase,ColBase,...
+                    VertexPacketLoss,BorderLength,RowBase,ColBase,RowCnt,ColCnt,...
                     EdgeCostDUB,EdgeBWDUB,VertexCostDUB,VertexDelayDUB,...
                     VertexPacketLossDUB);
                     Cluster = ClusterMatrix{i,j};
                     nodes = size(Cluster,2);
-%                 fprintf('Outnodes = %d\n',size(EdgeCost{i,j},2));
                 else
                     ClusterMatrix{i,j} = Cluster;
                     k = k + 1;
@@ -251,9 +247,27 @@ while true
         vdTime = VDTime(1) + (VDTime(2)-VDTime(1)) * rand;
     end
     
+%     t_Connect = clock;
+%     %检测拓扑的连通性
+%     for i = 1:RowCnt
+%             for j = 1:ColCnt
+%                 Cluster = ClusterMatrix{i,j};
+%                 nodes = size(Cluster,2);
+%                 visit = zeros(1,nodes);
+%                 idx = 1;
+%                 am = AM{i,j};
+%                 [AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay] = ...
+%                     CheckConnected(am,idx,visit,i,j,Cluster,AM,EdgeCost,...
+%                     EdgeDelay,EdgeBW,VertexDelay,EdgeCostDUB,EdgeBWDUB,VertexDelayDUB);
+%             end
+%     end
+%     t_ConnectDiff = etime(clock,t_Connect);
+%     fprintf('ConnectDiff = %f\n',t_ConnectDiff);
+                
+    
     %绘制动图
     drawnow;
-    %set(gcf,'Units','centimeter','Position',[5 5 50 50]); %设置图片大小
+%     set(gcf,'Units','centimeter','Position',[5 5 50 50]); %设置图片大小
     F=getframe(gcf);
     I=frame2im(F);
     [I,map]=rgb2ind(I,256);
@@ -269,9 +283,7 @@ while true
         for j = 1:ColCnt
             Cluster = ClusterMatrix{i,j};
             nodes = size(Cluster,2);
-%             fprintf('ClusterMatrix nodes = %d\n',nodes);
-%             fprintf('EdgeCost nodes = %d\n',size(EdgeCost{i,j},2));
-            Net_plot(BorderLength,nodes,Cluster,EdgeCost{i,j},PlotIf);
+            Net_plot(BorderLength,nodes,Cluster,AM{i,j},PlotIf);
         end
     end
 end
@@ -279,7 +291,7 @@ end
 end
 
 %用于绘制网络拓扑的函数
-function Net_plot(BorderLength,nodes,Cluster,edgeCost,PlotIf)
+function Net_plot(BorderLength,nodes,Cluster,am,PlotIf)
 %画节点
 if PlotIf == 1
     plot(Cluster(2,:),Cluster(3,:),'ko','MarkerEdgeColor','b','MarkerFaceColor','g','MarkerSize',5);    %'ko'：黑色圆圈；'MarkerEdgeColor'：标记的边框颜色；'MarkerFaceColor'：标记的颜色
@@ -294,7 +306,7 @@ end
 %画边
     for i = 1:(nodes-1)
         for j = (i+1):nodes
-            if isinf(edgeCost(i,j)) == 0
+            if am(i,j) == 1
                 plot([Cluster(2,i),Cluster(2,j)],[Cluster(3,i),Cluster(3,j)]);
                 hold on;
             end
