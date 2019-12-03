@@ -1,18 +1,23 @@
 
+clc;
+clf;
 [ClusterMatrix]=...
-    cluster_topology(1e2,100,1e3,2e2,1,[2,5],[30,1000],[2,4],1e-4*[5,20],1e-4*[3,8],1e-4*[0,500],[0,1],[0,2*pi]);
+    cluster_topology(1e2,40,1e5,5e1,1,[2,5],[30,1000],[3,5],[0,3],[0,2*pi]);
 hold off;
 
-% num = 5;
-% i = 1;
-% while i <= num
-%     fprintf('i = %d\n',i);
-%      i = i+1;
-%     if i == 3
-%         num = 4;
-%     end
-% end
 
+% linkNodePos = [[1,5,5]',[2,10,10]'];
+% speed = [1,2];
+% direction = [1/6,1/6]*pi;
+% MaxLinkDistance = 10;
+% b = linkNodePos(2,1) - linkNodePos(2,2);
+% d = linkNodePos(3,1) - linkNodePos(3,2);
+% a = speed(1)*cos(direction(1)) - speed(2)*cos(direction(2));
+% c = speed(1)*sin(direction(1)) - speed(2)*sin(direction(2));
+%     
+% LET = (-1*(a*b+c*d)+sqrt( (a.^2+ c.^2)*MaxLinkDistance.^2 - (a*d-b*c).^2))...
+%             / (a.^2+ c.^2);
+% fprintf('a = %f, b = %f, c = %f, d = %f, LET = %f\n',a,b,c,d,LET);
 
 % pic_num = 1;
 % for epsilon = 0.01:-0.001:0.005

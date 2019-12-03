@@ -23,11 +23,4 @@ function [sortedNodes] = SortNodesByDistance(NotIn,targetNodePos,ClusterMatrix_,
             sortedNodes(i) = nodesWithD(1,pos);
         end
     end
-        
-    %ต๗สิ
-    fprintf('============================SortNodesByDistance======================\n');
-    for i = 1:nodeNum
-        fprintf('%d\t',sortedNodes(i));
-    end
-    fprintf('\n===================================================================\n');
 end
