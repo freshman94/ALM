@@ -143,18 +143,18 @@ for i = 1:RowCnt
         ldt = zeros(nodesNum,nodesNum);
         vertexStability = zeros(1,nodesNum);
         for m = 1:(nodesNum-1)
-            degree = sum(am(m,:));
-            maxDegree = vertexMaxDegree(m);
             for n = (m+1):nodesNum
                 Distance = ( (Cluster(2,m)-Cluster(2,n))^2 +...
                     (Cluster(3,m)-Cluster(3,n))^2)^0.5;
                 P = Beta*exp(-Distance^5/(Alpha*BorderLength));
                 %节点度约束
+                degree = sum(am(m,:));
+                maxDegree = vertexMaxDegree(m);
+                linkNodeDegree = sum(am(n,:));
+                linkNodeMaxDegree = vertexMaxDegree(n);
                 if degree >= maxDegree
                     break;
                 end
-                linkNodeDegree = sum(am(n,:));
-                linkNodeMaxDegree = vertexMaxDegree(n);
                 if linkNodeDegree >= linkNodeMaxDegree
                     continue;
                 end
@@ -191,21 +191,10 @@ for i = 1:RowCnt
         Cluster = ClusterMatrix{i,j};
         nodesNum = size(Cluster,2);
         vertexDelay = zeros(1,nodesNum);
-        edgeDelay = EdgeDelay{i,j};
+        edgeDelay = EdgeDelay{i,j};  
         am = AM{i,j};
         for m = 1:nodesNum
-            degree = sum(am(m,:));
-            if degree == 0
-                vertexDelay(m) = inf;
-            else
-                edgeDelaySum = 0;
-                for n = 1:nodesNum
-                    if am(m,n) == 1
-                        edgeDelaySum = edgeDelaySum + edgeDelay(m,n);
-                    end
-                end
-                vertexDelay(m) = edgeDelaySum / degree;
-            end
+            vertexDelay(m) = GetVertexDelay(m,am,edgeDelay);
         end
         VertexDelay{i,j} = vertexDelay;
     end
@@ -240,7 +229,7 @@ while true
         for j = 1:ColCnt
             Cluster = ClusterMatrix{i,j};
             nodesNum = size(Cluster,2);
-            k = 1;
+            k = 1;                    
             while k <= nodesNum
                 Cluster(2,k) = Cluster(2,k) + Cluster(4,k)*cos(Cluster(5,k))*t_posDiff;
                 Cluster(3,k) = Cluster(3,k) + Cluster(4,k)*sin(Cluster(5,k))*t_posDiff;
@@ -260,7 +249,7 @@ while true
                 %移除无效链路
                 [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStability,...
                     VertexPriority] = RemoveIneffectiveLink(IsClusterHead,...
-                    MaxLinkDistance,k,nodesNum,ClusterMatrix,[i,j],AM,EdgeCost,...
+                    MaxLinkDistance,k,ClusterMatrix,[i,j],AM,EdgeCost,...
                     EdgeDelay, EdgeBW,VertexDelay,VertexMaxDegree,LDT,VertexStability,...
                     VertexPriority);
                 %若有节点脱离，尝试重连
@@ -367,7 +356,7 @@ end
 %移除无效链路
 function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStability,...
     VertexPriority] = RemoveIneffectiveLink(IsClusterHead_,MaxLinkDistance,nodeIdx,...
-    nodesNum,ClusterMatrix_,ClusterIdx,AM_,EdgeCost_,EdgeDelay_,EdgeBW_,VertexDelay_,...
+    ClusterMatrix_,ClusterIdx,AM_,EdgeCost_,EdgeDelay_,EdgeBW_,VertexDelay_,...
     VertexMaxDegree_,LDT_,VertexStability_,VertexPriority_)
 
     Cluster = ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)};
@@ -375,7 +364,7 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
     
     %调试参数
     once = 1;
-  
+    nodesNum = size(am,2);
     for i = 1:nodesNum
         if am(nodeIdx,i) == 1 
             distance = ( (Cluster(2,nodeIdx)-Cluster(2,i))^2 +...
@@ -442,39 +431,26 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
     edgeBW(LinkIdx(2),LinkIdx(1)) = inf;
     EdgeBW_{ClusterIdx(1),ClusterIdx(2)} = edgeBW;
     
+    edgeDelay(LinkIdx(1),LinkIdx(2)) = inf;
+    edgeDelay(LinkIdx(2),LinkIdx(1)) = inf;
+    EdgeDelay_{ClusterIdx(1),ClusterIdx(2)} = edgeDelay;
+    
     %更新LDT
     ldt(LinkIdx(1),LinkIdx(2)) = 0;
     ldt(LinkIdx(2),LinkIdx(1)) = 0;
     LDT_{ClusterIdx(1),ClusterIdx(2)} = ldt;
     
-    %更新Vertex*    
-    nodeDegree = sum(am(LinkIdx(1),:));
-    linkNodeDegree = sum(am(LinkIdx(2),:));
-    nodeDelayPre = vertexDelay(LinkIdx(1));
-    linkNodeDelayPre = vertexDelay(LinkIdx(2));
-    
-    if isnan(nodeDelayPre) || isinf(nodeDelayPre)
-        nodeDelayPre = 0;
+    %更新Vertex*
+    nodesNum = size(am,2);
+    for i = 1:nodesNum
+        vertexDelay(i) = GetVertexDelay(i,am,edgeDelay);
     end
-    if isnan(linkNodeDelayPre) || isinf(linkNodeDelayPre)
-        linkNodeDelayPre = 0;
-    end
-    
-    nodeDelayCur = (nodeDelayPre*(nodeDegree+1))/nodeDegree;
-    linkNodeDelayCur = (linkNodeDelayPre*(linkNodeDegree+1)-...
-        edgeDelay(LinkIdx(1),LinkIdx(2)))/linkNodeDegree;
-    vertexDelay(LinkIdx(1)) = nodeDelayCur;
-    vertexDelay(LinkIdx(2)) = linkNodeDelayCur;
     VertexDelay_{ClusterIdx(1),ClusterIdx(2)} = vertexDelay;
     
-    edgeDelay(LinkIdx(1),LinkIdx(2)) = inf;
-    edgeDelay(LinkIdx(2),LinkIdx(1)) = inf;
-    EdgeDelay_{ClusterIdx(1),ClusterIdx(2)} = edgeDelay;
-    
-    vertexPriority(LinkIdx(1)) = GetPriority(LinkIdx(1),vertexStability,am,...
-            vertexMaxDegree,vertexDelay);
-    vertexPriority(LinkIdx(2)) = GetPriority(LinkIdx(2),vertexStability,am,...
-            vertexMaxDegree,vertexDelay);
+    for i = 1:nodesNum
+        vertexPriority(i) = GetPriority(i,vertexStability,am,...
+                vertexMaxDegree,vertexDelay);
+    end
     VertexPriority_{ClusterIdx(1),ClusterIdx(2)} = vertexPriority;
     
     IsClusterHead = SetClusterHead(IsClusterHead_,ClusterIdx,vertexPriority);

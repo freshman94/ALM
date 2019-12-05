@@ -29,17 +29,18 @@ function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexMaxdegree,ver
     end
     
     delay = vertexDelay(nodeIdx);
-    delaySum = vertexDelay(nodeIdx);
+    if isinf(delay)
+        delay = 10e10;
+    end
+    delaySum = delay;
     for i = 1:nodesNum
-        if am(nodeIdx,i) == 1
-            fprintf('vertexDelay(%d) = %f\n',i,vertexDelay(i));
-            delaySum = delaySum + vertexDelay(i);
-        end
+%             fprintf('vertexDelay(%d) = %f\n',i,vertexDelay(i));
+        delaySum = delaySum + vertexDelay(i);
     end
     
     priority = a*(1-stability/stabilitySum) + b*(1-degree/degreeSum) + ...
                 c*delay/delaySum;
             
-    fprintf('nodeIdx = %d,stability = %f,stabilitySum = %f,degree = %d,degreeSum = %d,delay = %f,delaySum = %f,priority = %f\n',...
-        nodeIdx,stability,stabilitySum,degree,degreeSum,delay,delaySum,priority);
+%     fprintf('nodeIdx = %d,stability = %f,stabilitySum = %f,degree = %d,degreeSum = %d,delay = %f,delaySum = %f,priority = %f\n',...
+%         nodeIdx,stability,stabilitySum,degree,degreeSum,delay,delaySum,priority);
 end

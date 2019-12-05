@@ -144,23 +144,18 @@ function [AM,LDT,VertexDelay,VertexStability,VertexPriority,IsClusterHead] = ...
     vertexDelay(nodeIdx) = 0;
     for i = 1:affectedNodesNum
         node = affectedNodes(i);
-        vertexDelayPre = vertexDelay(node);
-        
-        if isnan(vertexDelayPre) || isinf(vertexDelayPre)
-            vertexDelayPre = 0;
-        end
-        
-        vertexDegree = sum(am(node,:));
-        affectedEdgeDelay = edgeDelay(nodeIdx,node);
-        vertexDelayCur = (vertexDelayPre*(vertexDegree+1)-affectedEdgeDelay)...
-                        /vertexDegree;
-        vertexDelay(node) = vertexDelayCur;
-        
         vertexStability(node) = sum(ldt(node,:));
-        vertexPriority(node) = GetPriority(node,vertexStability,am,vertexMaxDegree,...
-                        vertexDelay);
-        
     end
+    
+    for i = 1:nodesNum
+        vertexDelay(i) = GetVertexDelay(i,am,edgeDelay);
+    end
+    
+    for i = 1:nodesNum
+        vertexPriority(i) = GetPriority(i,vertexStability,am,vertexMaxDegree,...
+                        vertexDelay);
+    end
+    
     IsClusterHead = SetClusterHead(IsClusterHead_,ClusterIdx,vertexPriority);
     
     AM_{ClusterIdx(1),ClusterIdx(2)} = am;
@@ -231,7 +226,9 @@ function [IsClusterHead,Connected,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,.
     end
     
     %找到连接的结点使拓扑连通
-    if Connected == 1       
+    if Connected == 1     
+        %更新AM
+        AM_{ClusterIdx(1),ClusterIdx(2)} = am;
         %更新EdgeCost
         edgeCost = EdgeCost_{ClusterIdx(1),ClusterIdx(2)};
         %TODO应有公式
@@ -254,11 +251,12 @@ function [IsClusterHead,Connected,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,.
         edgeBW(linkIdx,affectedNodeIdx) = edgeBW(affectedNodeIdx,linkIdx);
         EdgeBW_{ClusterIdx(1),ClusterIdx(2)} = edgeBW;
         %更新VertexDelay
-        VertexDelay_ = GetVertexDelay(affectedNodeIdx,linkIdx,ClusterIdx,AM_,...
-                        VertexDelay_,NewEdgeDelay);
-        
-        %更新AM
-        AM_{ClusterIdx(1),ClusterIdx(2)} = am;
+        vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
+        nodesNum = size(am,2);
+        for i = 1:nodesNum
+            vertexDelay(i) = GetVertexDelay(i,am,edgeDelay);
+        end
+        VertexDelay_{ClusterIdx(1),ClusterIdx(2)} = vertexDelay;
         
         %更新LDT
         ldt = LDT_{ClusterIdx(1),ClusterIdx(2)};
@@ -273,16 +271,14 @@ function [IsClusterHead,Connected,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,.
         vertexStability(linkIdx) = sum(ldt(linkIdx,:));
         VertexStability_{ClusterIdx(1),ClusterIdx(2)} = vertexStability;
         
-        vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
         vertexPriority = VertexPriority_{ClusterIdx(1),ClusterIdx(2)};
-        vertexPriority(affectedNodeIdx) = GetPriority(affectedNodeIdx,vertexStability,...
-                    am,vertexMaxDegree,vertexDelay);
-        vertexPriority(linkIdx) = GetPriority(linkIdx,vertexStability,...
-                    am,vertexMaxDegree,vertexDelay);
+        for i = 1:nodesNum
+            vertexPriority(i) = GetPriority(i,vertexStability,...
+                        am,vertexMaxDegree,vertexDelay);
+        end
         VertexPriority_{ClusterIdx(1),ClusterIdx(2)} = vertexPriority;
         IsClusterHead_ = SetClusterHead(IsClusterHead_,ClusterIdx,vertexPriority);   
     end
-    
     AM = AM_;
     EdgeCost = EdgeCost_;
     EdgeDelay = EdgeDelay_;
@@ -316,19 +312,13 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
         sortedAffectedNodes(i) = affectedNodesWithX(1,pos);
     end
     
-    %调试
-    fprintf('============================sortedAffectedNodes========================\n');
-    for i = 1:affectedNum
-        fprintf('%d\t',sortedAffectedNodes(i));
-    end
-    fprintf('\n===================================================================\n');
-    
     am = AM_{ClusterIdx(1),ClusterIdx(2)};
     vertexMaxDegree = VertexMaxDegree_{ClusterIdx(1),ClusterIdx(2)};
     edgeCost = EdgeCost_{ClusterIdx(1),ClusterIdx(2)};
     edgeDelay = EdgeDelay_{ClusterIdx(1),ClusterIdx(2)};
     edgeBW = EdgeBW_{ClusterIdx(1),ClusterIdx(2)};
     ldt = LDT_{ClusterIdx(1),ClusterIdx(2)};
+    vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
     vertexStability = VertexStability_{ClusterIdx(1),ClusterIdx(2)};
     vertexPriority = VertexPriority_{ClusterIdx(1),ClusterIdx(2)};
     
@@ -350,7 +340,10 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
         
         Distance = ( (nodePos(2)-nextNodePos(2))^2 +...
                         (nodePos(3)-nextNodePos(3))^2)^0.5;
-        if am(node,nextNode) == 0 && Distance < MaxLinkDistance           
+        if am(node,nextNode) == 0 && Distance < MaxLinkDistance   
+            %更新AM_
+            am(node,nextNode) = 1;
+            am(nextNode,node) = 1;
             %更新EdgeCost
             %TODO应有公式
             NewEdgeCost = EdgeCostDUB(1)+(EdgeCostDUB(2)-EdgeCostDUB(1))*rand;
@@ -368,12 +361,10 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
             edgeBW(nextNode,node) = edgeBW(node,nextNode);
                       
             %更新VertexDelay
-            VertexDelay_ = GetVertexDelay(node,nextNode,ClusterIdx,AM_,VertexDelay_,...
-                            NewEdgeDelay);
-            
-            %更新AM_
-            am(node,nextNode) = 1;
-            am(nextNode,node) = 1;
+            nodesNum = size(am,2);
+            for k = 1:nodesNum
+                vertexDelay(k) = GetVertexDelay(k,am,edgeDelay);
+            end         
             
             %更新LDT
             ldt(node,nextNode) = GetLDT(MaxLinkDistance,Cluster(:,[node,nextNode]));
@@ -384,11 +375,10 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
             vertexStability(nextNode) = sum(ldt(nextNode,:));
             
             %更新VertexPriority
-            vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
-            vertexPriority(node) = GetPriority(node,vertexStability,...
-                    am,vertexMaxDegree,vertexDelay);
-            vertexPriority(nextNode) = GetPriority(nextNode,vertexStability,...
-                    am,vertexMaxDegree,vertexDelay);
+            for k = 1:nodesNum
+                vertexPriority(i) = GetPriority(i,vertexStability,...
+                        am,vertexMaxDegree,vertexDelay);
+            end
             IsClusterHead_ = SetClusterHead(IsClusterHead_,ClusterIdx,vertexPriority);
             
         end
@@ -411,6 +401,7 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
     EdgeDelay_{ClusterIdx(1),ClusterIdx(2)} = edgeDelay;
     EdgeBW_{ClusterIdx(1),ClusterIdx(2)} = edgeBW;  
     LDT_{ClusterIdx(1),ClusterIdx(2)} = ldt;
+    VertexDelay_{ClusterIdx(1),ClusterIdx(2)} = vertexDelay; 
     VertexStability_{ClusterIdx(1),ClusterIdx(2)} = vertexStability;
     VertexPriority_{ClusterIdx(1),ClusterIdx(2)} = vertexPriority;
     
@@ -454,7 +445,8 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,.
     %更新ClusterMatrix
     Cluster(:,nodeOutIdx) = [];
     Cluster(1,:) = [1:nodesOutNum-1];
-    ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)} = Cluster; 
+    ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)} = Cluster;
+    
     
     %更新Edge*
     edgeCost(:,nodeOutIdx) = [];
@@ -547,7 +539,7 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,.
     edgeBWAddRow = Inf(1,nodesNum+1); 
     
     vertexDelay = VertexDelay_{row,col};
-    vertexDelay(nodesNum+1) = inf;
+    vertexDelay(nodesNum+1) = 10e10;
     
     vertexMaxDegree = VertexMaxDegree_{row,col};
     vertexMaxDegree(nodesNum+1) = VertexDegreeDUB(1)+round( (VertexDegreeDUB(2)-VertexDegreeDUB(1))*rand);
@@ -561,7 +553,7 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,.
     vertexStability(nodesNum+1) = 0;
     
     vertexPriority = VertexPriority_{row,col};
-    vertexPriority(nodesNum+1) = 0;
+    vertexPriority(nodesNum+1) = 1;
     %选择距离最近的节点搭建链路(检查链路有效性）
     %（1）若结点linkIdx的度超出最大值，则选择下一结点尝试链接
     % (2）若与结点的距离超出或未超出，则相应地设置参数值，设置完后break
@@ -578,6 +570,7 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,.
         end
         
         if Distance < MaxLinkDistance
+            fprintf('join cluster[%d,%d],linkIdx = %d\n',row,col,linkIdx);
             amAddCol(linkIdx) = 1;
             amAddRow(linkIdx) = 1;
             
@@ -595,53 +588,49 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,.
             edgeBWAddCol(linkIdx) = NewEdgeBW;
             edgeBWAddRow(linkIdx) = NewEdgeBW;
             
-            vertexDelay(nodesNum+1) = NewEdgeDelay;
-            
-            linkNodeDegree = sum(am(linkIdx,:));
-            linkNodeDelayPre = vertexDelay(linkIdx);
-            if isnan(linkNodeDelayPre) || isinf(linkNodeDelayPre)
-                linkNodeDelayPre = 0;
-            end
-            linkNodeDelayCur = (linkNodeDelayPre*(linkNodeDegree-1)+NewEdgeDelay)...
-                                /linkNodeDegree;
-            vertexDelay(linkIdx) = linkNodeDelayCur;
-            
             NewLDT = GetLDT(MaxLinkDistance,[nodePos,linkNodePos]);
             ldtAddCol(linkIdx) = NewLDT;
-            ldtAddRow(linkIdx) = NewLDT;  
+            ldtAddRow(linkIdx) = NewLDT;
             
             vertexStability(nodesNum+1) = NewLDT;
             vertexStability(linkIdx) = vertexStability(linkIdx) + NewLDT;
         end
         break;
     end 
+    %此段代码须置于此处
+    %若新结点没有链接成功，则相应信息也能得到设置
     am = [am,amAddCol];
     am(nodesNum+1,:) = amAddRow;
-    AM_{row,col} = am;
-
+    
     edgeCost = [edgeCost,edgeCostAddCol];
     edgeCost(nodesNum+1,:) = edgeCostAddRow;
-    EdgeCost_{row,col} = edgeCost;
-
+    
     edgeDelay = [edgeDelay,edgeDelayAddCol];
     edgeDelay(nodesNum+1,:) = edgeDelayAddRow;
-    EdgeDelay_{row,col} = edgeDelay;
     
     edgeBW = [edgeBW,edgeBWAddCol];
     edgeBW(nodesNum+1,:) = edgeBWAddRow;
-    EdgeBW_{row,col} = edgeBW;
-
-    VertexDelay_{row,col} = vertexDelay; 
-    VertexStability_{row,col} = vertexStability;
     
     ldt = [ldt,ldtAddCol];
     ldt(nodesNum+1,:) = ldtAddRow;
-    LDT_{row,col} = ldt;
     
-    vertexPriority(nodesNum+1) = GetPriority(nodesNum+1,vertexStability,...
-                    am,vertexMaxDegree,vertexDelay);
-    vertexPriority(linkIdx) = GetPriority(linkIdx,vertexStability,...
-            am,vertexMaxDegree,vertexDelay);
+    num = nodesNum+1;
+    for k = 1:num
+        vertexDelay(k) = GetVertexDelay(k,am,edgeDelay);
+    end
+    
+    for k = 1:num
+        vertexPriority(k) = GetPriority(k,vertexStability,...
+                am,vertexMaxDegree,vertexDelay);
+    end
+    
+    AM_{row,col} = am;
+    EdgeCost_{row,col} = edgeCost;
+    EdgeDelay_{row,col} = edgeDelay;
+    EdgeBW_{row,col} = edgeBW;
+    VertexDelay_{row,col} = vertexDelay; 
+    VertexStability_{row,col} = vertexStability;
+    LDT_{row,col} = ldt;
     VertexPriority_{row,col} = vertexPriority;
     IsClusterHead = SetClusterHead(IsClusterHead_,[row,col],vertexPriority);
     
