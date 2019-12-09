@@ -1,7 +1,7 @@
 %%计算结点的优先值
-function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexMaxdegree,vertexDelay)
+function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexDelay)
 
-    fprintf('====================GetPriority==============================\n');
+%     fprintf('====================GetPriority==============================\n');
 %各个参数的权值
     a = 0.4;
     b = 0.4;

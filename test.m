@@ -2,12 +2,9 @@
 clc;
 clf;
 [ClusterMatrix]=...
-    cluster_topology(1e2,40,1e5,5e1,1,[2,5],[30,1000],[3,5],[0,3],[0,2*pi]);
+    cluster_topology(1e2,40,1e5,5e1,[3,5],[0,3],[0,2*pi]);
 hold off;
 
-% Paths = {};
-% n = size(Paths,2);
-% n
 
 % linkNodePos = [[1,5,5]',[2,10,10]'];
 % speed = [1,2];

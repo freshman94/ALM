@@ -6,16 +6,7 @@ function [paths,visit,stack] = GetPaths(src,des,am,paths_,visit_,stack_)
     stack_ = [stack_,src];
     nodesNum = size(visit_,2);
     for i = 1:nodesNum
-        if src == des
-            %调试
-%             fprintf('==================Getpaths=================\n');
-%             fprintf('src = %d,des = %d\n',stack_(1),des);
-%             stackSize = size(stack_,2);
-%             for j = 1:stackSize;
-%                 fprintf('%d -> ',stack_(j));
-%             end
-%             fprintf('\n=======================================\n');
-            
+        if src == des           
             %找到路径，存储下来
             paths_ = [paths_,stack_];
             %出栈

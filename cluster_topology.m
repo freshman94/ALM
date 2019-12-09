@@ -6,27 +6,23 @@
 3.链路时延等于节点距离除以三分之二光速，更加符合实际情况
 %}
 
-function [Sxy,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,ClusterMatrix]=cluster_topology(BorderLength,NodeAmount, ...
-Alpha,Beta,PlotIf,EdgeCostDUB,EdgeBWDUB,VertexDegreeDUB,VertexSpeedDUB,VertexDirecDUB)
+function [Sxy,AM,EdgeDelay,VertexDelay,ClusterMatrix]=cluster_topology(BorderLength,NodeAmount, ...
+Alpha,Beta,VertexDegreeDUB,VertexSpeedDUB,VertexDirecDUB)
 %% 输入参数列表
 %BorderLength————正方形区域的边长，单位：km
 %NodeAmount————网络节点的个数
 %Alpha————网络特征参数，Alpha越大，短边相对长边的比例越大
 %Beta————网络特征参数，Beta越大，边的密度越大
 %PlotIf————是否画网络拓扑图，如果为1，则画图，否则不画图
-%EdgeCostDUB————链路费用的控制参数，1*2，存储链路费用的下界和上界
-%EdgeBWDUB————链路带宽的控制参数，1*2，存储下界和上界
 
 %%  输出参数
 %Sxy————3*N的矩阵，各列分别用于存储节点的序号，横坐标，纵坐标的矩阵
 %AM————0 1存储矩阵，AM(i,j)=1表示存在由i到j的有向边，N*N
-%EdgeCost————链路费用矩阵，N*N
 %EdgeDelay————链路时延矩阵，N*N
-%EdgeBW————链路带宽矩阵，N*N 
 %VertexDelay————节点时延向量，1*N
 %%推荐的输入参数设置 
 %BorderLength=1000;NodeAmount=25;Alpha=100000000;Beta=200000000000;
-%PlotIf=1;EdgeCostDUB=[2,5];EdgeBWDUB=[30,1000];
+%PlotIf=1;
 %%
 %参数初始化
 NN = 10*NodeAmount;
@@ -49,6 +45,8 @@ pic_num = 1;
 %链路有效长度
 MaxLinkDistance = sqrt( (1/3*RowBase)^2 + (1/3*ColBase)^2 )*BorderLength/10;
 
+%簇内传输路径构建的参数
+condidatesNum = (VertexDegreeDUB(1) + VertexDegreeDUB(2))/4;
 
 %在正方形区域内随机均匀选取NN个节点
 for i = 1:NN
@@ -68,22 +66,20 @@ xlim([0,BorderLength]);
 ylim([0,BorderLength]);
 
 %坐标名
-if PlotIf == 1
-    xlabel('x (km)','FontName','Times New Roman','FontSize',12);
-    ylabel('y (km)','FontName','Times New Roman','FontSize',12);
-end
+xlabel('x (km)','FontName','Times New Roman','FontSize',12);
+ylabel('y (km)','FontName','Times New Roman','FontSize',12);
 
  %输出参数初始化（胞元数组）
 AM = cell(RowCnt,ColCnt);
-EdgeCost = cell(RowCnt,ColCnt);
 EdgeDelay = cell(RowCnt,ColCnt);
-EdgeBW = cell(RowCnt,ColCnt);
 VertexDelay = cell(RowCnt,ColCnt);
 VertexMaxDegree = cell(RowCnt,ColCnt);
 LDT = cell(RowCnt,ColCnt);
 VertexStability = cell(RowCnt,ColCnt);
 VertexPriority = cell(RowCnt,ColCnt);
 IsClusterHead = cell(RowCnt,ColCnt);
+LinkContri = cell(RowCnt,ColCnt);
+Path = cell(RowCnt,ColCnt);
 
 %初始时间
 t_pos = clock;
@@ -130,16 +126,14 @@ for i = 1:RowCnt
 end
 
 
-%设置链路的初始参数值（连接矩阵，EdgeDelay,EdgeCost,EdgeBW)
+%设置链路的初始参数值（连接矩阵，EdgeDelay)
 for i = 1:RowCnt
     for j = 1:ColCnt
         Cluster = ClusterMatrix{i,j};
         nodesNum = size(Cluster,2);
         vertexMaxDegree = VertexMaxDegree{i,j};
         am = zeros(nodesNum,nodesNum);
-        edgeCost = Inf(nodesNum,nodesNum);
         edgeDelay = Inf(nodesNum,nodesNum);
-        edgeBW = Inf(nodesNum,nodesNum);
         ldt = zeros(nodesNum,nodesNum);
         vertexStability = zeros(1,nodesNum);
         for m = 1:(nodesNum-1)
@@ -163,10 +157,6 @@ for i = 1:RowCnt
                     am(n,m) = 1;
                     edgeDelay(m,n) = 0.5*Distance/100000;
                     edgeDelay(n,m) = edgeDelay(m,n);
-                    edgeCost(m,n) = EdgeCostDUB(1)+(EdgeCostDUB(2)-EdgeCostDUB(1))*rand;
-                    edgeCost(n,m)=edgeCost(m,n);
-                    edgeBW(m,n) = EdgeBWDUB(1)+(EdgeBWDUB(2)-EdgeBWDUB(1))*rand;
-                    edgeBW(n,m)=edgeBW(m,n);
                     ldt(m,n) = GetLDT(MaxLinkDistance,Cluster(:,[m,n]));
                     ldt(n,m) = ldt(m,n);
                 end
@@ -176,9 +166,7 @@ for i = 1:RowCnt
         vertexStability(nodesNum) = sum(ldt(nodesNum,:));
         
         AM{i,j} = am;
-        EdgeCost{i,j} = edgeCost;
         EdgeDelay{i,j} = edgeDelay;
-        EdgeBW{i,j} = edgeBW;
         LDT{i,j} = ldt;
         VertexStability{i,j} = vertexStability;
     end
@@ -211,13 +199,38 @@ for i = 1:RowCnt
         nodesNum = size(vertexStability,2);
         vertexPriority = zeros(1,nodesNum);
         for m = 1:nodesNum
-            vertexPriority(m) = GetPriority(m,vertexStability,am,...
-                        vertexMaxDegree,vertexDelay);     
+            vertexPriority(m) = GetPriority(m,vertexStability,am,vertexDelay);     
         end
         VertexPriority{i,j} = vertexPriority;
         IsClusterHead = SetClusterHead(IsClusterHead,[i,j],vertexPriority);
-        Net_plot(BorderLength,nodesNum,ClusterMatrix{i,j},AM{i,j},PlotIf,...
-            IsClusterHead{i,j},vertexPriority);
+        Net_plot(BorderLength,nodesNum,ClusterMatrix{i,j},AM{i,j},...
+            IsClusterHead{i,j},vertexPriority,[i,j]);
+    end
+end
+
+%获取节点的链路贡献度
+for i = 1:RowCnt
+    for j = 1:ColCnt
+        am = AM{i,j};
+        vertexMaxDegree = VertexMaxDegree{i,j};
+        isClusterHead = IsClusterHead{i,j};
+        edgeDelay = EdgeDelay{i,j};
+        nodesNum = size(am,2);
+        linkContri = zeros(1,nodesNum);
+        for k = 1:nodesNum
+            if isClusterHead(k) == 1
+                headIdx = k;
+                break;
+            end
+        end
+        
+        for k = 1:nodesNum
+            if k ~= headIdx
+                linkContri(k) = GetLinkContri(k,vertexMaxDegree(k),headIdx,am,...
+                    edgeDelay);
+            end
+        end
+        LinkContri{i,j} = linkContri;    
     end
 end
 
@@ -247,36 +260,65 @@ while true
                 ClusterMatrix{i,j} = Cluster;
                 
                 %移除无效链路
-                [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStability,...
+                [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,...
                     VertexPriority] = RemoveIneffectiveLink(IsClusterHead,...
-                    MaxLinkDistance,k,ClusterMatrix,[i,j],AM,EdgeCost,...
-                    EdgeDelay, EdgeBW,VertexDelay,VertexMaxDegree,LDT,VertexStability,...
-                    VertexPriority);
+                    MaxLinkDistance,k,ClusterMatrix,[i,j],AM,...
+                    EdgeDelay,VertexDelay,LDT,VertexStability,VertexPriority);
                 %若有节点脱离，尝试重连
-                [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,...
+                [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,...
                     VertexStability,VertexPriority] ...
                     = ReConnect(IsClusterHead,MaxLinkDistance,ClusterMatrix,...
-                    [i,j],k,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,...
-                    VertexMaxDegree,LDT,VertexStability,VertexPriority,...
-                    EdgeCostDUB,EdgeBWDUB);
+                    [i,j],k,AM,EdgeDelay,VertexDelay,...
+                    VertexMaxDegree,LDT,VertexStability,VertexPriority);
                 
                 %节点移动至其它簇(节点加入与退出）
                 row = min(max(ceil(10 * Cluster(3,k)/(BorderLength*RowBase)),1),RowCnt);
                 col = min(max(ceil(10 * Cluster(2,k)/(BorderLength*ColBase)),1),ColCnt);
                 if (row ~= i) || (col ~= j)
-                    [IsClusterHead,ClusterMatrix,AM,EdgeCost,EdgeDelay,EdgeBW,...
-                        VertexDelay,VertexMaxDegree,LDT,VertexStability,VertexPriority] ...
-                        = VertexOutAndIn(IsClusterHead,MaxLinkDistance,ClusterMatrix,...
-                        [i,j],k,Cluster(:,k),AM, EdgeCost,EdgeDelay,EdgeBW,VertexDelay,...
-                        VertexMaxDegree,LDT,VertexStability,VertexPriority,...
-                        BorderLength,RowBase,ColBase,RowCnt,ColCnt,...
-                        EdgeCostDUB,EdgeBWDUB,VertexDegreeDUB);
-                    Cluster = ClusterMatrix{i,j};
-                    nodesNum = size(Cluster,2);
-                else
-                    k = k + 1;
+                    [~,MostConnected] = CheckConnected(AM{i,j},k,inf);
+                    %移动至其它簇的节点，若处于连通状态，则不脱离簇
+                    if MostConnected == 0
+                        [IsClusterHead,ClusterMatrix,AM,EdgeDelay,...
+                            VertexDelay,VertexMaxDegree,LDT,VertexStability,VertexPriority] ...
+                            = VertexOutAndIn(IsClusterHead,MaxLinkDistance,ClusterMatrix,...
+                            [i,j],k,Cluster(:,k),AM,EdgeDelay,VertexDelay,...
+                            VertexMaxDegree,LDT,VertexStability,VertexPriority,...
+                            BorderLength,RowBase,ColBase,RowCnt,ColCnt,VertexDegreeDUB);
+                    end
                 end
-            end       
+                
+                Cluster = ClusterMatrix{i,j};
+                nodesNum = size(Cluster,2);
+                %若簇的最后一个结点脱离，此时k溢出
+                if k > nodesNum
+                    break;
+                end
+                
+                %脱离部分尝试与附近簇相连
+                [k,IsClusterHead,ClusterMatrix,AM,EdgeDelay,VertexDelay,VertexMaxDegree,...
+                    LDT,VertexStability,VertexPriority]...
+                    = ReConnectToOthers(IsClusterHead,MaxLinkDistance,ClusterMatrix,...
+                    [i,j],k,AM,EdgeDelay,VertexDelay,VertexMaxDegree,...
+                    LDT,VertexStability,VertexPriority,BorderLength,RowBase,ColBase,...
+                    RowCnt,ColCnt);
+                Cluster = ClusterMatrix{i,j};
+                nodesNum = size(Cluster,2);
+            end
+            paths = ConstructPath(IsClusterHead{i,j},AM{i,j},LinkContri{i,j},...
+                VertexStability{i,j},condidatesNum);
+            
+%             fprintf('======================Print Path======================\n')
+%             fprintf('cluster[%d,%d]\n',i,j);
+%             pathNum = size(paths,2);
+%             for p = 1:pathNum
+%                 path = paths{p};
+%                 nodeNum = size(path,2);
+%                 for q = 1:nodeNum
+%                     fprintf('%d -> ',path(q));
+%                 end
+%                 fprintf('\n');
+%             end
+%             fprintf('\n==========================================\n');
         end
     end
     t_pos = clock;
@@ -317,7 +359,8 @@ while true
         for j = 1:ColCnt
             Cluster = ClusterMatrix{i,j};
             nodesNum = size(Cluster,2);
-            Net_plot(BorderLength,nodesNum,Cluster,AM{i,j},PlotIf,IsClusterHead{i,j},VertexPriority{i,j});
+            Net_plot(BorderLength,nodesNum,Cluster,AM{i,j},IsClusterHead{i,j},...
+                VertexPriority{i,j},[i,j]);
         end
     end
 end
@@ -325,10 +368,10 @@ end
 end
 
 %用于绘制网络拓扑的函数
-function Net_plot(BorderLength,nodesNum,Cluster,am,PlotIf,isClusterHead,vertexPriority)
+function Net_plot(BorderLength,nodesNum,Cluster,am,isClusterHead,vertexPriority,...
+                    ClusterIdx)
 %画节点
-if PlotIf == 1
-    plot(Cluster(2,:),Cluster(3,:),'ko','MarkerEdgeColor','b','MarkerFaceColor','g','MarkerSize',5);    %'ko'：黑色圆圈；'MarkerEdgeColor'：标记的边框颜色；'MarkerFaceColor'：标记的颜色
+    plot(Cluster(2,:),Cluster(3,:),'ko','MarkerSize',5);    %'ko'：黑色圆圈；'MarkerEdgeColor'：标记的边框颜色；'MarkerFaceColor'：标记的颜色
     hold on;    %表示可在原图上修改
     %节点标序号
     for i = 1:nodesNum
@@ -336,17 +379,23 @@ if PlotIf == 1
         Str = [int2str(i),'(',priorityStr,')'];
         if isClusterHead(i) == 1
             plot(Cluster(2,i),Cluster(3,i),'r.','MarkerSize',30);
-%             Str = strcat(Str,'(head)');
         end
         text(Cluster(2,i)+BorderLength/100,Cluster(3,i)+BorderLength/100,Str,'FontName','Times New Roman','FontSize',12);
         hold on;
     end
-end
 %画边
+    lineColors = ['g','b','c','m','k'];
+    num = size(lineColors,2);
+    Idx = mod(2*ClusterIdx(1) + ClusterIdx(2),num); 
+    if Idx == 0
+        Idx = num;
+    end
+    lineColor = lineColors(Idx);
+    
     for i = 1:(nodesNum-1)
         for j = (i+1):nodesNum
             if am(i,j) == 1
-                plot([Cluster(2,i),Cluster(2,j)],[Cluster(3,i),Cluster(3,j)]);
+                plot([Cluster(2,i),Cluster(2,j)],[Cluster(3,i),Cluster(3,j)],lineColor);
                 hold on;
             end
         end
@@ -354,10 +403,10 @@ end
 end
 
 %移除无效链路
-function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStability,...
+function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,...
     VertexPriority] = RemoveIneffectiveLink(IsClusterHead_,MaxLinkDistance,nodeIdx,...
-    ClusterMatrix_,ClusterIdx,AM_,EdgeCost_,EdgeDelay_,EdgeBW_,VertexDelay_,...
-    VertexMaxDegree_,LDT_,VertexStability_,VertexPriority_)
+    ClusterMatrix_,ClusterIdx,AM_,EdgeDelay_,VertexDelay_,...
+    LDT_,VertexStability_,VertexPriority_)
 
     Cluster = ClusterMatrix_{ClusterIdx(1),ClusterIdx(2)};
     am = AM_{ClusterIdx(1),ClusterIdx(2)};
@@ -383,18 +432,16 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
                 end
                 once = 2;
                 fprintf('RemoveLink (%d,%d)\n',nodeIdx,i);
-                [IsClusterHead_,AM_,EdgeCost_,EdgeDelay_,EdgeBW_,VertexDelay_,LDT_,...
+                [IsClusterHead_,AM_,EdgeDelay_,VertexDelay_,LDT_,...
                     VertexStability_,VertexPriority_] = LinkDisconnect(IsClusterHead_,...
-                    [nodeIdx,i],ClusterIdx,AM_,EdgeCost_,EdgeDelay_,EdgeBW_,...
-                    VertexDelay_,VertexMaxDegree_,LDT_,VertexStability_,VertexPriority_);
+                    [nodeIdx,i],ClusterIdx,AM_,EdgeDelay_,...
+                    VertexDelay_,LDT_,VertexStability_,VertexPriority_);
             end
         end
     end
     IsClusterHead = IsClusterHead_;
     AM = AM_;
-    EdgeCost = EdgeCost_;
     EdgeDelay = EdgeDelay_;
-    EdgeBW = EdgeBW_;
     VertexDelay = VertexDelay_;
     LDT = LDT_;
     VertexStability = VertexStability_;
@@ -402,35 +449,24 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
 end
 
 %链路断开
-function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStability,...
-    VertexPriority] = LinkDisconnect(IsClusterHead_,LinkIdx,ClusterIdx,AM_,EdgeCost_,...
-    EdgeDelay_,EdgeBW_,VertexDelay_,VertexMaxDegree_,LDT_,VertexStability_,...
+function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,...
+    VertexPriority] = LinkDisconnect(IsClusterHead_,LinkIdx,ClusterIdx,AM_,...
+    EdgeDelay_,VertexDelay_,LDT_,VertexStability_,...
     VertexPriority_)
 
     am = AM_{ClusterIdx(1),ClusterIdx(2)};
-    edgeCost = EdgeCost_{ClusterIdx(1),ClusterIdx(2)};
     edgeDelay = EdgeDelay_{ClusterIdx(1),ClusterIdx(2)};
-    edgeBW = EdgeBW_{ClusterIdx(1),ClusterIdx(2)};
     vertexDelay = VertexDelay_{ClusterIdx(1),ClusterIdx(2)};
     ldt = LDT_{ClusterIdx(1),ClusterIdx(2)};
     vertexStability = VertexStability_{ClusterIdx(1),ClusterIdx(2)};
     vertexPriority = VertexPriority_{ClusterIdx(1),ClusterIdx(2)};
-    vertexMaxDegree = VertexMaxDegree_{ClusterIdx(1),ClusterIdx(2)};
     
     %更新AM   
     am(LinkIdx(1),LinkIdx(2)) = 0;
     am(LinkIdx(2),LinkIdx(1)) = 0;
     AM_{ClusterIdx(1),ClusterIdx(2)} = am; 
     
-    %更新Edge*
-    edgeCost(LinkIdx(1),LinkIdx(2)) = inf;
-    edgeCost(LinkIdx(2),LinkIdx(1)) = inf;
-    EdgeCost_{ClusterIdx(1),ClusterIdx(2)} = edgeCost;
-    
-    edgeBW(LinkIdx(1),LinkIdx(2)) = inf;
-    edgeBW(LinkIdx(2),LinkIdx(1)) = inf;
-    EdgeBW_{ClusterIdx(1),ClusterIdx(2)} = edgeBW;
-    
+    %更新EdgeDelay
     edgeDelay(LinkIdx(1),LinkIdx(2)) = inf;
     edgeDelay(LinkIdx(2),LinkIdx(1)) = inf;
     EdgeDelay_{ClusterIdx(1),ClusterIdx(2)} = edgeDelay;
@@ -448,17 +484,14 @@ function [IsClusterHead,AM,EdgeCost,EdgeDelay,EdgeBW,VertexDelay,LDT,VertexStabi
     VertexDelay_{ClusterIdx(1),ClusterIdx(2)} = vertexDelay;
     
     for i = 1:nodesNum
-        vertexPriority(i) = GetPriority(i,vertexStability,am,...
-                vertexMaxDegree,vertexDelay);
+        vertexPriority(i) = GetPriority(i,vertexStability,am,vertexDelay);
     end
     VertexPriority_{ClusterIdx(1),ClusterIdx(2)} = vertexPriority;
     
     IsClusterHead = SetClusterHead(IsClusterHead_,ClusterIdx,vertexPriority);
     
     AM = AM_;
-    EdgeCost = EdgeCost_;
     EdgeDelay = EdgeDelay_;
-    EdgeBW = EdgeBW_;
     VertexDelay = VertexDelay_;
     LDT = LDT_;
     VertexStability = VertexStability_;

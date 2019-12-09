@@ -1,7 +1,7 @@
 function [delay] = GetVertexDelay(nodeIdx,am,edgeDelay)
 %更新节点的时延，am,edgeDelay需要是更新后的
 
-    fprintf('=====================GetVertexDelay==================\n');
+%     fprintf('=====================GetVertexDelay==================\n');
     nodesNum = size(am,2);
     node2nodeDelay = zeros(1,nodesNum);
     for i = 1:nodesNum
@@ -21,11 +21,8 @@ function [delay] = GetVertexDelay(nodeIdx,am,edgeDelay)
                     for n = 1:pathNodesNum-1
                         pathDelay = pathDelay + edgeDelay(path(n),path(n+1));
                     end
-%                     fprintf('pathDelay(%d,%d) = %f\t',nodeIdx,i,pathDelay);
                 end
-%                 fprintf('\n');
                 node2nodeDelay(i) = pathDelay/pathNum;
-%                 fprintf('node2nodeDelay(%d,%d) = %f\t',nodeIdx,i,node2nodeDelay(i));
             end
         end
     end
