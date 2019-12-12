@@ -79,7 +79,7 @@ VertexStability = cell(RowCnt,ColCnt);
 VertexPriority = cell(RowCnt,ColCnt);
 IsClusterHead = cell(RowCnt,ColCnt);
 LinkContri = cell(RowCnt,ColCnt);
-Path = cell(RowCnt,ColCnt);
+Paths = cell(RowCnt,ColCnt);
 
 %初始时间
 t_pos = clock;
@@ -195,7 +195,6 @@ for i = 1:RowCnt
         am = AM{i,j};
         vertexStability = VertexStability{i,j};
         vertexDelay = VertexDelay{i,j};
-        vertexMaxDegree = VertexMaxDegree{i,j};
         nodesNum = size(vertexStability,2);
         vertexPriority = zeros(1,nodesNum);
         for m = 1:nodesNum
@@ -204,7 +203,7 @@ for i = 1:RowCnt
         VertexPriority{i,j} = vertexPriority;
         IsClusterHead = SetClusterHead(IsClusterHead,[i,j],vertexPriority);
         Net_plot(BorderLength,nodesNum,ClusterMatrix{i,j},AM{i,j},...
-            IsClusterHead{i,j},vertexPriority,[i,j]);
+            IsClusterHead{i,j},vertexPriority,[i,j],{});
     end
 end
 
@@ -304,21 +303,17 @@ while true
                 Cluster = ClusterMatrix{i,j};
                 nodesNum = size(Cluster,2);
             end
-            paths = ConstructPath(IsClusterHead{i,j},AM{i,j},LinkContri{i,j},...
-                VertexStability{i,j},condidatesNum);
             
-%             fprintf('======================Print Path======================\n')
-%             fprintf('cluster[%d,%d]\n',i,j);
-%             pathNum = size(paths,2);
-%             for p = 1:pathNum
-%                 path = paths{p};
-%                 nodeNum = size(path,2);
-%                 for q = 1:nodeNum
-%                     fprintf('%d -> ',path(q));
-%                 end
-%                 fprintf('\n');
-%             end
-%             fprintf('\n==========================================\n');
+            path = ConstructPath(IsClusterHead{i,j},AM{i,j},EdgeDelay{i,j});
+            Paths{i,j} = path;
+            
+            fprintf('======================Print Path======================\n')
+            fprintf('cluster[%d,%d]\n',i,j);
+            pathNum = size(path,2);
+            for p = 1:pathNum
+                fprintf('%d ->%d\n ',path(1,p),path(2,p));
+            end
+            fprintf('\n==========================================\n');
         end
     end
     t_pos = clock;
@@ -360,7 +355,7 @@ while true
             Cluster = ClusterMatrix{i,j};
             nodesNum = size(Cluster,2);
             Net_plot(BorderLength,nodesNum,Cluster,AM{i,j},IsClusterHead{i,j},...
-                VertexPriority{i,j},[i,j]);
+                VertexPriority{i,j},[i,j],Paths{i,j});
         end
     end
 end
@@ -369,7 +364,7 @@ end
 
 %用于绘制网络拓扑的函数
 function Net_plot(BorderLength,nodesNum,Cluster,am,isClusterHead,vertexPriority,...
-                    ClusterIdx)
+                    ClusterIdx,path)
 %画节点
     plot(Cluster(2,:),Cluster(3,:),'ko','MarkerSize',5);    %'ko'：黑色圆圈；'MarkerEdgeColor'：标记的边框颜色；'MarkerFaceColor'：标记的颜色
     hold on;    %表示可在原图上修改
@@ -400,6 +395,15 @@ function Net_plot(BorderLength,nodesNum,Cluster,am,isClusterHead,vertexPriority,
             end
         end
     end
+    pathNum = size(path,2);
+    for p = 1:pathNum
+        if path(1,p) > 0
+            [x,y] = GetArrow([Cluster(2,path(1,p)),Cluster(3,path(1,p))],...
+                [Cluster(2,path(2,p)),Cluster(3,path(2,p))],BorderLength);
+            plot(x,y,lineColor);
+        end
+    end
+        
 end
 
 %移除无效链路

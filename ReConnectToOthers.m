@@ -364,4 +364,22 @@ function [IsClusterHead,ClusterMatrix,AM,EdgeDelay,VertexDelay,...
     LDT = LDT_;
     VertexStability = VertexStability_;
     VertexPriority = VertexPriority_;    
+    
+    fprintf('================Out Cluster am=================\n');
+    for p = 1:nodesNum
+        for q = 1:nodesNum
+            fprintf('am(%d,%d) = %d\t',p,q,am(p,q));
+        end
+        fprintf('\n');
+    end
+    fprintf('=========================\n');
+    
+    fprintf('================In Cluster am=================\n');
+    for p = 1:num
+        for q = 1:num
+            fprintf('am_(%d,%d) = %d\t',p,q,am_(p,q));
+        end
+        fprintf('\n');
+    end
+    fprintf('=========================\n');
 end
