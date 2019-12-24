@@ -1,5 +1,5 @@
 function [edgeTo] = ConstructPath(isClusterHead,am,edgeDelay)
-    fprintf('=================ConstructPath====================\n');
+%     fprintf('=================ConstructPath====================\n');
     nodesNum = size(isClusterHead,2);
     for i = 1:nodesNum
         if isClusterHead(i) == 1
@@ -16,18 +16,18 @@ function [edgeTo] = ConstructPath(isClusterHead,am,edgeDelay)
     IndexMinPQ = PQinsert(IndexMinPQ,headIdx,0);
     PQnum = size(IndexMinPQ,2);
     while PQnum > 0
-        fprintf('IndexMinPQ: ');
-        for i = 1:PQnum
-            rows = size(IndexMinPQ,1);
-            fprintf('[');
-            for j = 1:rows
-                fprintf('%d ',IndexMinPQ(j,i));
-            end
-            fprintf(']\t');
-        end
-        fprintf('\n');
+%         fprintf('IndexMinPQ: ');
+%         for i = 1:PQnum
+%             rows = size(IndexMinPQ,1);
+%             fprintf('[');
+%             for j = 1:rows
+%                 fprintf('%d ',IndexMinPQ(j,i));
+%             end
+%             fprintf(']\t');
+%         end
+%         fprintf('\n');
         [IndexMinPQ,minIdx] = PQdelmin(IndexMinPQ);
-        fprintf('minIdx = %d\n',minIdx);
+%         fprintf('minIdx = %d\n',minIdx);
         [edgeTo,distTo,IndexMinPQ] = relax(am,edgeDelay,minIdx,edgeTo,distTo,...
                                         IndexMinPQ);
         PQnum = size(IndexMinPQ,2);
@@ -45,27 +45,27 @@ function [edgeTo,distTo,IndexMinPQ] = relax(am,edgeDelay,nodeIdx,edgeTo_,distTo_
                 edgeTo_(:,i) = [nodeIdx,i]';
                 idx = PQcontain(IndexMinPQ_,i);
                 if idx > 0
-                    fprintf('PQ change %d\n',i);
+%                     fprintf('PQ change %d\n',i);
                     IndexMinPQ_ = PQchange(IndexMinPQ_,idx,i,distTo_(i));
                 else
-                    fprintf('PQ insert %d\n',i);
+%                     fprintf('PQ insert %d\n',i);
                     IndexMinPQ_ = PQinsert(IndexMinPQ_,i,distTo_(i));
                 end
             end
         end
     end
     
-    fprintf('edgeTo: ');
-    for i = 1:nodesNum
-        fprintf('%d:[%d->%d]\t',i,edgeTo_(1,i),edgeTo_(2,i));
-    end
-    fprintf('\n');
-    
-    fprintf('distTo: ');
-    for i = 1:nodesNum
-        fprintf('%d:%f\t',i,distTo_(i));
-    end
-    fprintf('\n');
+%     fprintf('edgeTo: ');
+%     for i = 1:nodesNum
+%         fprintf('%d:[%d->%d]\t',i,edgeTo_(1,i),edgeTo_(2,i));
+%     end
+%     fprintf('\n');
+%     
+%     fprintf('distTo: ');
+%     for i = 1:nodesNum
+%         fprintf('%d:%f\t',i,distTo_(i));
+%     end
+%     fprintf('\n');
     
     edgeTo = edgeTo_;
     distTo = distTo_;

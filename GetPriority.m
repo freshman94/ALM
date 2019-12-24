@@ -1,5 +1,5 @@
 %%计算结点的优先值
-function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexDelay)
+function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexDelay,interClusterInfo)
 
 %     fprintf('====================GetPriority==============================\n');
 %各个参数的权值
@@ -20,12 +20,15 @@ function [priority] = GetPriority(nodeIdx,vertexStability,am,vertexDelay)
     end
     adjNodesNum = size(adjNodes,2);
     degree = sum(am(nodeIdx,:));
+    degree = degree + size(interClusterInfo{3,nodeIdx},2);
     for i = 1:adjNodesNum
         degree = degree + sum(am(adjNodes(i),:));
+        degree = degree + size(interClusterInfo{3,adjNodes(i)},2);
     end
     degreeSum = 0;
     for i = 1:nodesNum
         degreeSum = degreeSum + sum(am(i,:));
+        degreeSum = degreeSum + size(interClusterInfo{3,i},2);
     end
     
     delay = vertexDelay(nodeIdx);

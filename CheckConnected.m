@@ -28,8 +28,8 @@ function [isConnected,MostConnected,visit] = CheckConnected(am,idx,nodeIdx)
     if nodesNum == (visitNum - include)
         isConnected = 1;
     end
-    MostPercent = 0.5;
-    if visitNum > floor(MostPercent*nodesNum) 
+    MostPercent = 0.7;
+    if visitNum >= floor(MostPercent*nodesNum) 
         MostConnected = 1;
     end
 end
