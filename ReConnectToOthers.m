@@ -121,12 +121,12 @@ function [IsClusterHead,VertexPriority,InterClusterInfo]...
 %                                         clusterIdx(1),clusterIdx(2),linkIdx,...
 %                                         linkCluster(1),linkCluster(2),cluster_linkIdx);
                                  if size(linkInfo_{2,linkIdx},2) == 0
-                                   linkInfo_{1,linkIdx} = [];
+                                   linkInfo_{1,linkIdx} = 0;
                                    InterClusterInfo_{clusterIdx(1),clusterIdx(2)} = linkInfo_;
                                  end
                                  
                                  if size(linkClusters_,2) == 0
-                                    info_{1,cluster_linkIdx} = [];
+                                    info_{1,cluster_linkIdx} = 0;
                                     InterClusterInfo_{linkCluster(1),linkCluster(2)} = info_;
                                   end
                                  

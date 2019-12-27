@@ -79,6 +79,8 @@ IsClusterHead = cell(RowCnt,ColCnt);
 LinkContri = cell(RowCnt,ColCnt);
 Paths = cell(RowCnt,ColCnt);
 InterClusterInfo = cell(RowCnt,ColCnt);
+Tree = {};
+Src = 0;
 
 %初始时间
 t_pos = clock;
@@ -124,6 +126,9 @@ for i = 1:RowCnt
         nodesNum = size(Cluster,2);
         infoNum = 3;
         info = cell(infoNum,nodesNum);
+        for p = 1:nodesNum
+           info{1,p} = 0; 
+        end
         InterClusterInfo{i,j} = info;
     end
 end
@@ -320,8 +325,12 @@ while true
 %             fprintf('\n==========================================\n');
         end
     end
-%     tree = ConstructMTree(AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
-%     [isConnected,visit] = ClusterConnected(InterClusterInfo,RowCnt,ColCnt);
+    [Tree,Src] = ConstructMTree(AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
+    Tree
+    cnt = size(Tree,1);
+    for j = 1:cnt
+       Tree{j} 
+    end
     
     
     t_pos = clock;
@@ -388,6 +397,7 @@ while true
                 VertexPriority{i,j},[i,j],Paths{i,j},InterClusterInfo{i,j});
         end
     end
+    Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead);
 end
     
 end
@@ -431,10 +441,6 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
 %画簇间边
     for i = 1:nodesNum
         if interCluserInfo{1,i} == 1
-%             fprintf('ClusterIdx[%d,%d] nodeIdx = %d\n',ClusterIdx(1),ClusterIdx(2),i);
-%             interCluserInfo
-%             interCluserInfo{2,i}
-%             interCluserInfo{3,i}
             linkClusters = interCluserInfo{2,i};
             linkIdxs = interCluserInfo{3,i};
             linkNum = size(linkClusters,2);
@@ -447,16 +453,61 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
             end
         end
     end
-
+    %簇内传输路径
     pathNum = size(path,2);
     for p = 1:pathNum
         if path(1,p) > 0
             [x,y] = GetArrow([Cluster(2,path(1,p)),Cluster(3,path(1,p))],...
-                [Cluster(2,path(2,p)),Cluster(3,path(2,p))],BorderLength);
+                [Cluster(2,path(2,p)),Cluster(3,path(2,p))],BorderLength,[0.6,0.6]);
             plot(x,y,color);
         end
     end
-        
+    
+    hold on;     
+end
+
+%绘制组播树
+function Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead)
+    isClusterHead = IsClusterHead{Src(1),Src(2)};
+    nodesNum = size(isClusterHead,2);
+    for i = 1:nodesNum
+       if isClusterHead(i) == 1
+           headIdx = i;
+       end
+    end
+    cluster = ClusterMatrix{Src(1),Src(2)};
+    Str = 'Src';
+    text(cluster(2,headIdx),cluster(3,headIdx)+BorderLength/30,...
+        Str,'FontName','Times New Roman','FontSize',12,'Color','red');
+    
+    num = size(Tree,1);
+    for i = 1:2:(num-1)
+       clusterIdx =  Tree{i};
+       clusterNum = size(clusterIdx,1);
+       path = Tree{i+1};
+       %簇内
+       if clusterNum == 1
+           cluster = ClusterMatrix{clusterIdx(1),clusterIdx(2)};
+           nodeNum = size(path,2);
+           if nodeNum == 1
+               continue;
+           end
+           for j = 1:(nodeNum-1)
+               src = [cluster(2,path(j)),cluster(3,path(j))];
+               dst = [cluster(2,path(j+1)),cluster(3,path(j+1))];
+               [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
+               plot(x,y,'r');
+           end
+       %簇间
+       elseif clusterNum == 2
+           cluster_1 = ClusterMatrix{clusterIdx(1,1),clusterIdx(1,2)};
+           cluster_2 = ClusterMatrix{clusterIdx(2,1),clusterIdx(2,2)};
+           src = [cluster_1(2,path(1)),cluster_1(3,path(1))];
+           dst = [cluster_2(2,path(2)),cluster_2(3,path(2))];
+           [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
+           plot(x,y,'r');
+       end
+    end
 end
 
 %移除无效链路
@@ -636,14 +687,14 @@ function [InterClusterInfo,VertexPriority,IsClusterHead] = InterLinkDisconnect..
                     end
                     IsClusterHead_ = SetClusterHead(IsClusterHead_,linkClusterIdx,vertexPriority_);
                     if size(linkInfo{2,linkIdx},2) == 0
-                        linkInfo{1,linkIdx} = [];
+                        linkInfo{1,linkIdx} = 0;
                     end
                     InterClusterInfo_{linkClusterIdx(1),linkClusterIdx(2)} = linkInfo;
                     VertexPriority_{linkClusterIdx(1),linkClusterIdx(2)} = vertexPriority_;
                 
                     linkNum = size(linkClusters,2);
                     if size(info{2,nodeIdx},2) == 0
-                        info{1,nodeIdx} = [];
+                        info{1,nodeIdx} = 0;
                         break;
                     end
                 else
