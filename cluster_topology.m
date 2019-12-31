@@ -325,7 +325,8 @@ while true
 %             fprintf('\n==========================================\n');
         end
     end
-    [Tree,Src] = ConstructMTree(AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
+    [Tree,Src] = ConstructMTree(ClusterMatrix,AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
+    Src
     Tree
     cnt = size(Tree,1);
     for j = 1:cnt
@@ -405,7 +406,7 @@ end
 %用于绘制网络拓扑的函数
 function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPriority,...
                     ClusterIdx,path,interCluserInfo)
-    Colors = ['g','b','c','m','k'];
+    Colors = ['g','b','c','k'];
     num = size(Colors,2);
     Idx = mod(2*ClusterIdx(1) + ClusterIdx(2),num); 
     if Idx == 0
