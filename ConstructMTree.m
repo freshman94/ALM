@@ -34,6 +34,9 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
             %key
             visit(next_cluster(1),next_cluster(2)) = 1;
             
+            %分支（与簇首脱离的部分）
+            break_branches = {};
+            
             path_ = Paths_{next_cluster(1),next_cluster(2)};
             isClusterHead_ = IsClusterHead_{next_cluster(1),next_cluster(2)};
             nodesNum = size(isClusterHead_,2);
@@ -55,202 +58,253 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
                 end
                 next_clusters_ = [next_clusters_,nextClusters_];
                 next_mediators_ = [next_mediators_,nextMediators_];
+                continue;
+            end
             %mediator不是簇首
             %(2)mediatorB->headB
-            else
-                branch_ = next_mediator;
-                node = next_mediator;
-                %用于指示mediator与Head是否相通
-                mToHead = 1;
-                for p = 1:nodesNum
-                    link = path_(:,node);
-                    up = link(1);
-                    %mediator与headIdx_不相通
-                    if up == 0
-                        mToHead = 0;
-                        break;
-                    end;
-                    branch_ = [branch_,up];
-                    if up == headIdx_
-                       tree = [tree;next_cluster.';branch_]; 
-                       break;
-                    end
-                    node = up;
+            branch_ = next_mediator;
+            node = next_mediator;
+            %用于指示mediator与Head是否相通
+            mToHead = 1;
+            for p = 1:nodesNum
+                link = path_(:,node);
+                up = link(1);
+                %mediator与headIdx_不相通，结束
+                if up == 0
+                    mToHead = 0;
+                    break;
+                end;
+                branch_ = [branch_,up];
+                if up == headIdx_
+                   tree = [tree;next_cluster.';branch_]; 
+                   break;
                 end
-                %(3)mediatorB->mediatorC or headB->mediatorC
-                info_ = InterClusterInfo_{next_cluster(1),next_cluster(2)};
-                [row,col] = size(InterClusterInfo_);
-                interClusters = zeros(row,col);
-                condidates = [];
-                branches = {};
-                minHop = [];
-                minDelay = [];
-                am = AM_{next_cluster(1),next_cluster(2)};
-                edgeDelay = EdgeDelay_{next_cluster(1),next_cluster(2)};
-                isFreshed = 0;
-                for j = 1:nodesNum
-                    if info_{1,j} == 1
-                      clusters = info_{2,j};
-                      nodes = info_{3,j};
-                      cnt = size(clusters,2);
-                      for p = 1:cnt
-                         cluster = clusters(:,p); 
-                         node = nodes(p);
-                         
-                         isClusterHead_adj = IsClusterHead_{cluster(1),cluster(2)};
-                         nodesNum_adj = size(isClusterHead_adj,2);
-                         for n = 1:nodesNum_adj
-                            if isClusterHead_adj(n) == 1
-                               headIdx_adj = n; 
+                node = up;
+            end
+
+            if mToHead == 0
+               break; 
+            end
+
+            %(3)mediatorB->mediatorC or headB->mediatorC
+            info_ = InterClusterInfo_{next_cluster(1),next_cluster(2)};
+            [row,col] = size(InterClusterInfo_);
+            interClusters = zeros(row,col);
+            condidates = [];
+            branches = {};
+            minHop = [];
+            minDelay = [];
+            am = AM_{next_cluster(1),next_cluster(2)};
+            edgeDelay = EdgeDelay_{next_cluster(1),next_cluster(2)};
+            isFreshed = 0;
+            for j = 1:nodesNum
+                if info_{1,j} == 1
+                  clusters = info_{2,j};
+                  nodes = info_{3,j};
+                  cnt = size(clusters,2);
+                  for p = 1:cnt
+                     cluster = clusters(:,p); 
+                     node = nodes(p);
+
+                     isClusterHead_adj = IsClusterHead_{cluster(1),cluster(2)};
+                     nodesNum_adj = size(isClusterHead_adj,2);
+                     for n = 1:nodesNum_adj
+                        if isClusterHead_adj(n) == 1
+                           headIdx_adj = n; 
+                        end
+                     end
+
+                     am_adj = AM_{cluster(1),cluster(2)};
+                     [~,~,nodeVisit] = CheckConnected(am_adj,node,inf);
+                     %若该节点与其簇首不相通，需将信息亦转发给它，并以该节点为源，
+                     %建立其所属的脱离部分的传输路径
+                     if nodeVisit(headIdx_adj) == 0
+                         %检测是否有重复
+                         break_exit = 0;
+                         break_branchNum = size(break_branches,1);
+                         if break_branchNum ~= 0
+                            for n = 1:2:(break_branchNum-1)
+                                break_cluster = break_branches{n};
+                                break_branch = break_branches{n+1};
+                                if size(break_cluster,1) == 1 &&...
+                                        break_cluster(1) == cluster(1) && break_cluster(2) == cluster(2)
+                                    if ismember(node,break_branch)
+                                        break_exit = 1;
+                                        break;
+                                    end
+                                end
                             end
                          end
-                         
-                         if visit(cluster(1),cluster(2)) == 0
-                             %headB->mediatorC（需要mediator与head能相通)
-                             if j == headIdx_ && mToHead == 1
-                                 %若已存在与该簇的branch，并且node与condidate(4)可相通
-                                 am_adj = AM_{cluster(1),cluster(2)};
-                                 [isConnected,~,nodeVisit] = CheckConnected(am_adj,node,inf);
+
+                         if break_exit == 0
+                             break_branches = [break_branches;[next_cluster.';cluster.'];[j,node]];
+                             %为脱离部分建立路径
+                             if sum(nodeVisit) > 1
+                                 edgeDelay_adj = EdgeDelay_{cluster(1),cluster(2)};
+                                 nodesNum_adj = size(nodeVisit,2);
+                                 for n = 1:nodesNum_adj
+                                    if nodeVisit(n) == 1 && n ~= node
+                                       minPath = MinPath(node,n,am_adj,edgeDelay_adj);
+                                       break_branches = [break_branches;cluster.';minPath];
+                                    end
+                                 end
+                             end
+                         end   
+                     end
+
+                     if visit(cluster(1),cluster(2)) == 0 && nodeVisit(headIdx_adj) == 1
+                         %headB->mediatorC（需要mediator与head能相通)
+                         if j == headIdx_ && mToHead == 1
+                             interClusters(cluster(1),cluster(2)) = 1;
+                             %若已存在与该簇的branch，并且node与condidate(4)可相通
+                             condidatesNum = size(condidates,2);
+                             for n = 1:condidatesNum
+                                condidate = condidates(:,n);
+                                if condidate(2) == cluster(1) && condidate(3) == cluster(2)...
+                                        && nodeVisit(condidate(4)) == 1
+                                    condidates(1,n) = j;
+                                    condidates(4,n) = node;
+                                    branches{n} = j;
+                                    minHop(n,3) = 0;
+                                    minDelay(n,3) = 0;
+                                    isFreshed = 1;
+                                    break;
+                                end
+                             end
+                             if isFreshed == 0 
+                                 condidates = [condidates,[j,cluster(1),cluster(2),node]'];
+                                 branches = [branches,j];
+                                 minHop = [minHop,[cluster(1),cluster(2),0]'];
+                                 minDelay = [minDelay,[cluster(1),cluster(2),0]'];
+                             end                     
+                         else
+                             %mediatorB->mediatorC
+                             am_adj = AM_{cluster(1),cluster(2)};
+                             [~,~,nodeVisit] = CheckConnected(am_adj,node,inf);
+                             %若condidates中已存在至该簇的路径
+                             %仅当nodeVisit不同时，才添加至condidates
+                             canReach = -1;
+                             condidatesNum = size(condidates,2);
+                             for n = 1:condidatesNum
+                                condidate = condidates(:,n);
+                                if condidate(2) == cluster(1) && condidate(3) == cluster(2)
+                                    canReach = 0;
+                                    if nodeVisit(condidate(4)) == 1                                            
+                                         canReach = 1;
+                                    end
+                                end
+                             end
+
+                             if canReach == 0
+                                 condidates = [condidates,[j,cluster(1),cluster(2),node]'];
+                                 branches = [branches,mToIn_path];
+                                 minHop = [minHop,[cluster(1),cluster(2),hop]'];
+                                 minDelay = [minDelay,[cluster(1),cluster(2),delay]'];
+                                continue; 
+                             end
+
+                             if interClusters(cluster(1),cluster(2)) == 0
+                                 [mToIn_path,hop,delay] = MinPath(next_mediator,j,am,edgeDelay);
+                                 if size(mToIn_path,2) == 0
+                                    continue;
+                                 end
+                                 interClusters(cluster(1),cluster(2)) = 1;
+                                 condidates = [condidates,[j,cluster(1),cluster(2),node]'];
+                                 branches = [branches,mToIn_path];
+                                 minHop = [minHop,[cluster(1),cluster(2),hop]'];
+                                 minDelay = [minDelay,[cluster(1),cluster(2),delay]'];
+
+                             else
+                                 %簇间传输路径有多条，
+                                 %(1)选直接与附近簇首相连的(2)选时延最小的
+                                 sameInter = 0;
                                  condidatesNum = size(condidates,2);
                                  for n = 1:condidatesNum
                                     condidate = condidates(:,n);
-                                    if condidate(2) == cluster(1) && condidate(3) == cluster(2)...
-                                            && nodeVisit(condidate(4)) == 1
-                                        condidates(1,n) = j;
-                                        condidates(4,n) = node;
-                                        branches{n} = j;
-                                        minHop(n,3) = 0;
-                                        minDelay(n,3) = 0;
-                                        isFreshed = 1;
+                                    if condidate(1) == j && condidate(2) == cluster(1) &&...
+                                            condidate(3) == cluster(2) && condidate(4) ~= headIdx_adj...
+                                            && node ~= headIdx_adj
+                                        sameInter = 1;
+                                        if condidate(4) == headIdx_adj
+                                           continue; 
+                                        elseif node == headIdx_adj
+                                           condidates(4,n) = node; 
+                                           continue;
+                                        end
+
+                                        cluster_=ClusterMatrix_{next_cluster(1),next_cluster(2)};
+                                        interCluster=ClusterMatrix_{cluster(1),cluster(2)};
+                                        nodePos = cluster_(:,j);
+                                        linkNodePos_1 = interCluster(:,node);
+                                        linkNodePos_2 = interCluster(:,condidate(4));
+                                        distance_1 = (nodePos(2)-linkNodePos_1(2))^2+...
+                                            (nodePos(3)-linkNodePos_1(3))^2;
+                                        distance_2 = (nodePos(2)-linkNodePos_2(2))^2+...
+                                            (nodePos(3)-linkNodePos_2(3))^2;
+                                        if distance_1 < distance_2
+                                           condidates(4,n) = node; 
+                                           continue;
+                                        end
+                                    end
+                                 end
+
+                                 if sameInter == 1
+                                    continue; 
+                                 end
+
+                                 [mToIn_path,hop,delay] = MinPath(next_mediator,j,am,edgeDelay);
+                                 if size(mToIn_path,2) == 0
+                                    continue;
+                                 end
+                                 minHopNum = size(minHop,2);
+                                 for n = 1:minHopNum
+                                    if minHop(1,n) == cluster(1) && minHop(2,n) == cluster(2) 
+                                        min_idx = n;
                                         break;
                                     end
                                  end
-                                 if isFreshed == 0 
-                                     condidates = [condidates,[j,cluster(1),cluster(2),node]'];
-                                     branches = [branches,j];
-                                     minHop = [minHop,[cluster(1),cluster(2),0]'];
-                                     minDelay = [minDelay,[cluster(1),cluster(2),0]'];
-                                 end                    
-                                 
-                                 if isConnected == 1
-                                    interClusters(cluster(1),cluster(2)) = 1;
-                                 end
-                                 fprintf('headB->mediatorC:isConnected=%d\n',isConnected);
-                             else
-                                 %mediatorB->mediatorC
-                                 if interClusters(cluster(1),cluster(2)) == 0
-                                     [mToIn_path,hop,delay] = MinPath(next_mediator,j,am,edgeDelay);
-                                     if size(mToIn_path,2) == 0
-                                        continue;
-                                     end
-                                     am_adj = AM_{cluster(1),cluster(2)};
-                                     [isConnected,~,nodeVisit] = CheckConnected(am_adj,node,inf);
-                                     if isConnected == 1
-                                        interClusters(cluster(1),cluster(2)) = 1;
-                                     end
-                                     %若condidates中已存在至该簇的路径
-                                     %仅当nodeVisit不同时，才添加至condidates
-                                     isAdded = 0;
-                                     condidatesNum = size(condidates,2);
-                                     for n = 1:condidatesNum
-                                        condidate = condidates(:,n);
-                                        if condidate(2) == cluster(1) && condidate(3) == cluster(2)
-                                            if nodeVisit(condidate(4)) == 0
-                                                 condidates = [condidates,[j,cluster(1),cluster(2),node]'];
-                                                 branches = [branches,mToIn_path];
-                                                 minHop = [minHop,[cluster(1),cluster(2),hop]'];
-                                                 minDelay = [minDelay,[cluster(1),cluster(2),delay]'];
-                                            end
-                                            isAdded = 1;
-                                            break;
-                                        end
-                                     end
-                                     
-                                     if isAdded == 0
-                                         condidates = [condidates,[j,cluster(1),cluster(2),node]'];
-                                         branches = [branches,mToIn_path];
-                                         minHop = [minHop,[cluster(1),cluster(2),hop]'];
-                                         minDelay = [minDelay,[cluster(1),cluster(2),delay]'];
-                                     end
-                                     
-                                 else
-                                     %簇间传输路径有多条，
-                                     %(1)选直接与附近簇首相连的(2)选时延最小的
-                                     condidatesNum = size(condidates,2);
-                                     for n = 1:condidatesNum
-                                        condidate = condidates(:,n);
-                                        if condidate(1) == j && condidate(2) == cluster(1) &&...
-                                                condidate(3) == cluster(2) && condidate(4) ~= headIdx_adj...
-                                                && node ~= headIdx_adj
-                                            cluster_=ClusterMatrix_{next_cluster(1),next_cluster(2)};
-                                            interCluster=ClusterMatrix_{cluster(1),cluster(2)};
-                                            nodePos = cluster_(:,j);
-                                            linkNodePos_1 = interCluster(:,node);
-                                            linkNodePos_2 = interCluster(:,condidate(4));
-                                            distance_1 = (nodePos(2)-linkNodePos_1(2))^2+...
-                                                (nodePos(3)-linkNodePos_1(3))^2;
-                                            distance_2 = (nodePos(2)-linkNodePos_2(2))^2+...
-                                                (nodePos(3)-linkNodePos_2(3))^2;
-                                            if distance_1 < distance_2
-                                               fprintf('==========shorter interLink==========\n'); 
-                                               condidates(4,n) = node; 
-                                            else
-                                                continue;
-                                            end
-                                        end
-                                     end
-                                     
-                                     [mToIn_path,hop,delay] = MinPath(next_mediator,j,am,edgeDelay);
-                                     if size(mToIn_path,2) == 0
-                                        continue;
-                                     end
-                                     minHopNum = size(minHop,2);
-                                     for n = 1:minHopNum
-                                        if minHop(1,n) == cluster(1) && minHop(2,n) == cluster(2) 
-                                            min_idx = n;
-                                            break;
-                                        end
-                                     end
-                                     min_hop = minHop(3,min_idx);
-                                     if hop < min_hop
+                                 min_hop = minHop(3,min_idx);
+                                 if hop < min_hop
+                                    condidates(:,min_idx) = [j,cluster(1),cluster(2),node]';
+                                    branches{min_idx} = mToIn_path;
+                                    minHop(3,min_idx) = hop;
+                                    minDelay(3,min_idx) = delay;
+                                %跳数相同
+                                %(1)选择与附近簇簇首直接相连的（2）选时延最小的
+                                 elseif hop == min_hop
+                                     min_delay = minDelay(3,min_idx);
+                                     if node == headIdx_adj || delay < min_delay
                                         condidates(:,min_idx) = [j,cluster(1),cluster(2),node]';
                                         branches{min_idx} = mToIn_path;
-                                        minHop(3,min_idx) = hop;
                                         minDelay(3,min_idx) = delay;
-                                    %跳数相同
-                                    %(1)选择与附近簇簇首直接相连的（2）选时延最小的
-                                     elseif hop == min_hop
-                                         min_delay = minDelay(3,min_idx);
-                                         if node == headIdx_adj || delay < min_delay
-                                            condidates(:,min_idx) = [j,cluster(1),cluster(2),node]';
-                                            branches{min_idx} = mToIn_path;
-                                            minDelay(3,min_idx) = delay;
-                                         end
                                      end
                                  end
                              end
                          end
-                      end
-                    end
+                     end
+                  end
                 end
-                condidatesNum = size(condidates,2);
-                for n = 1:condidatesNum
-                    condidate = condidates(:,n);
-                    branch = branches{n};
-                    visit(condidate(2),condidate(3)) = 1;
-                    tree = [tree;next_cluster.';branch];
-                    tree = [tree;[next_cluster.';condidate(2),condidate(3)];[condidate(1),condidate(4)]];
-                    next_clusters_ = [next_clusters_,[condidate(2),condidate(3)]'];
-                    next_mediators_ = [next_mediators_,condidate(4)];
-                    %若condidate(4)不能与所在簇节点全连通，则所在簇的visit值应置为0
-                    am_ = AM_{condidate(2),condidate(3)};
-                    isConnected = CheckConnected(am_,condidate(4),inf);
-                    if isConnected == 0
-                       visit(condidate(2),condidate(3)) = 0; 
-                    end
-                end              
+            end
+            condidatesNum = size(condidates,2);
+            for n = 1:condidatesNum
+                condidate = condidates(:,n);
+                branch = branches{n};
+                tree = [tree;next_cluster.';branch];
+                tree = [tree;[next_cluster.';condidate(2),condidate(3)];[condidate(1),condidate(4)]];
+                next_clusters_ = [next_clusters_,[condidate(2),condidate(3)]'];
+                next_mediators_ = [next_mediators_,condidate(4)];
+                %当condidate(4)与所在簇节点全连通时，所在簇的visit值才置为1
+                am_ = AM_{condidate(2),condidate(3)};
+                isConnected = CheckConnected(am_,condidate(4),inf);
+                if isConnected == 1
+                   visit(condidate(2),condidate(3)) = 1; 
+                end
+            end
+            if size(break_branches,1) ~= 0
+               tree = [tree;break_branches]; 
             end
         end
+        
         if size(next_clusters_,2) == 0
             break;
         end
@@ -275,6 +329,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
         end
     end
 
+    break_branches = {};
     interNodes = [];
     %interNodes是4阶矩阵，每一列包含的信息有:nodeIdx,link_clusterIdx,link_nodeIdx
     for j = 1:nodesNum
@@ -285,7 +340,53 @@ function [finish,visit,tree,next_clusters,next_mediators]...
           for p = 1:cnt
              cluster = clusters(:,p); 
              node = nodes(p);
-             if visit_(cluster(1),cluster(2)) == 0
+             
+             isClusterHead_adj = IsClusterHead_{cluster(1),cluster(2)};
+             nodesNum_adj = size(isClusterHead_adj,2);
+             for n = 1:nodesNum_adj
+                if isClusterHead_adj(n) == 1
+                   headIdx_adj = n; 
+                end
+             end
+             
+             am_adj = AM_{cluster(1),cluster(2)};
+             [~,~,nodeVisit] = CheckConnected(am_adj,node,inf);
+             %若该节点与其簇首不相通，需将信息亦转发给它，并以该节点为源，
+             %建立其所属的脱离部分的传输路径
+             if nodeVisit(headIdx_adj)== 0
+                 %检测是否有重复
+                 break_exit = 0;
+                 break_branchNum = size(break_branches,1);
+                 if break_branchNum ~= 0
+                    for n = 1:2:(break_branchNum-1)
+                        break_cluster = break_branches{n};
+                        break_branch = break_branches{n+1};
+                        if size(break_cluster,1) == 1 &&...
+                                break_cluster(1) == cluster(1) && break_cluster(2) == cluster(2)
+                            if ismember(node,break_branch)
+                                break_exit = 1;
+                                break;
+                            end
+                        end
+                    end
+                 end
+                if break_exit == 0
+                     break_branches = [break_branches;[src;cluster.'];[j,node]];
+                     %为脱离部分建立路径
+                     if sum(nodeVisit) > 1
+                         edgeDelay_adj = EdgeDelay_{cluster(1),cluster(2)};
+                         nodesNum_adj = size(nodeVisit,2);
+                         for n = 1:nodesNum_adj
+                            if nodeVisit(n) == 1 && n ~= node
+                               minPath = MinPath(node,n,am_adj,edgeDelay_adj);
+                               break_branches = [break_branches;cluster.';minPath];
+                            end
+                         end
+                     end
+                 end 
+             end
+             
+             if visit_(cluster(1),cluster(2)) == 0 && nodeVisit(headIdx_adj) == 1
                  interNodes = [interNodes,[j,cluster(1),cluster(2),node]']; 
                  continue;
              end
@@ -294,7 +395,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
     end
 %     interNodes
     interNodesNum = size(interNodes,2);
-    if interNodesNum == 0
+    if interNodesNum == 0 && size(break_branches,1) == 0
         finish = 1;
         visit = visit_;
         tree = tree_;
@@ -318,10 +419,11 @@ function [finish,visit,tree,next_clusters,next_mediators]...
         interNode = interNodes(:,j);
         %簇首与相邻簇相连
         if interNode(1) == headIdx
+           interClusters(interNode(2),interNode(3)) = 1; 
            %若已存在与该簇的branch,并且interNode(4)与condidate(4)之间可达，更新
            condidatesNum = size(condidates,2);
            am_adj = AM_{interNode(2),interNode(3)};
-           [isConnected,~,nodeVisit] = CheckConnected(am_adj,interNode(4),inf);
+           [~,~,nodeVisit] = CheckConnected(am_adj,interNode(4),inf);
            for n = 1:condidatesNum
               condidate = condidates(:,n);
               if condidate(2) == interNode(2) && condidate(3) == interNode(3) &&...
@@ -340,12 +442,6 @@ function [finish,visit,tree,next_clusters,next_mediators]...
                branches = [branches,interNode(1)];
                minHop = [minHop,[interNode(2),interNode(3),0]'];
            end
-           
-           %即将与其相连的附近簇只有是全连通的，才可以被标记为已访问
-           if isConnected == 1
-              interClusters(interNode(2),interNode(3)) = 1;  
-           end
-           fprintf('SrcToM head->interNode:isConnected=%d\n',isConnected);
            continue;
         end
         
@@ -358,12 +454,21 @@ function [finish,visit,tree,next_clusters,next_mediators]...
         end
 
         %簇间传输路径有多条，(1)选与附近簇首直接相连的(2)选时延最小的
+        sameInter = 0;
         condidatesNum = size(condidates,2);
         for k = 1:condidatesNum
             condidate = condidates(:,k);
             if interNode(1) == condidate(1) && interNode(2) == condidate(2) &&...
                     interNode(3) == condidate(3) && condidate(4) ~= headIdx_...
-                    && interNode(4) ~= headIdx_                
+                    && interNode(4) ~= headIdx_ 
+               sameInter = 1;
+               if condidate(4) == headIdx_
+                   break;
+               elseif interNode(4) == headIdx_
+                   condidates(4,k) = interNode(4);
+                   break;
+               end              
+               
                cluster = ClusterMatrix_{src(1),src(2)};
                interCluster = ClusterMatrix_{interNode(2),interNode(3)};
                nodePos = cluster(:,interNode(1));
@@ -375,9 +480,13 @@ function [finish,visit,tree,next_clusters,next_mediators]...
                             (nodePos(3)-linkNodePos_2(3))^2;
                if distance_1 < distance_2
                    condidates(4,k) = interNode(4);
-                   fprintf('=========shorter interLink==============\n');
+                   break;
                end
             end
+        end
+        
+        if sameInter == 1
+            continue;
         end
 
         branch = interNode(1); 
@@ -404,35 +513,33 @@ function [finish,visit,tree,next_clusters,next_mediators]...
             hop = hop + 1;
             branch = [up,branch];
             if up == headIdx
-               if interClusters(interNode(2),interNode(3)) == 0
-                   %若condidates中已存在至该簇的路径
-                   %仅当nodeVisit不同时，才添加至condidates
-                   am_adj = AM_{interNode(2),interNode(3)};
-                   [isConnected,~,nodeVisit] = CheckConnected(am_adj,interNode(4),inf);
-                   if isConnected == 1
-                        interClusters(interNode(2),interNode(3)) = 1;
-                   end
-                   isAdded = 0;
-                   condidatesNum = size(condidates,2);
-                   for n = 1:condidatesNum
-                       condidate = condidates(:,n);
-                       if condidate(2) == interNode(2) && condidate(3) == interNode(3)
-                           if nodeVisit(condidate(4)) == 0
-                               condidates = [condidates,interNode];
-                               branches = [branches,branch];
-                               minHop = [minHop,[interNode(2),interNode(3),hop]'];
-                           end
-                           isAdded = 1;
-                           break;
+                %若condidates中已存在至该簇的路径
+                %且interNode与condidate(4)不可通时，才添加至condidates
+                am_adj = AM_{interNode(2),interNode(3)};
+                [~,~,nodeVisit] = CheckConnected(am_adj,interNode(4),inf);
+                canReach = -1;
+                condidatesNum = size(condidates,2);
+                for n = 1:condidatesNum
+                   condidate = condidates(:,n);
+                   if condidate(2) == interNode(2) && condidate(3) == interNode(3)
+                       canReach = 0;
+                       if nodeVisit(condidate(4)) == 1
+                           canReach = 1;
                        end
                    end
-                   
-                   if isAdded == 0
-                       condidates = [condidates,interNode];
-                       branches = [branches,branch];
-                       minHop = [minHop,[interNode(2),interNode(3),hop]'];
-                   end
-                   
+                end
+                if canReach == 0
+                   condidates = [condidates,interNode];
+                   branches = [branches,branch];
+                   minHop = [minHop,[interNode(2),interNode(3),hop]'];
+                   break; 
+                end
+                
+               if interClusters(interNode(2),interNode(3)) == 0
+                   interClusters(interNode(2),interNode(3)) = 1;
+                   condidates = [condidates,interNode];
+                   branches = [branches,branch];
+                   minHop = [minHop,[interNode(2),interNode(3),hop]'];
                else
                    %获取至该附近簇的最小跳数
                    minHopNum = size(minHop,2);
@@ -519,6 +626,11 @@ function [finish,visit,tree,next_clusters,next_mediators]...
            visit_(condidate(2),condidate(3)) = 1;
        end
     end
+    
+    if size(break_branches,1) ~= 0
+       tree_ = [tree_;break_branches];
+    end
+    
     tree = tree_;
     visit = visit_;
 end
