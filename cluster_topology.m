@@ -76,7 +76,6 @@ LDT = cell(RowCnt,ColCnt);
 VertexStability = cell(RowCnt,ColCnt);
 VertexPriority = cell(RowCnt,ColCnt);
 IsClusterHead = cell(RowCnt,ColCnt);
-LinkContri = cell(RowCnt,ColCnt);
 Paths = cell(RowCnt,ColCnt);
 InterClusterInfo = cell(RowCnt,ColCnt);
 Tree = {};
@@ -227,31 +226,6 @@ for i = 1:RowCnt
     end
 end
 
-%获取节点的链路贡献度
-for i = 1:RowCnt
-    for j = 1:ColCnt
-        am = AM{i,j};
-        vertexMaxDegree = VertexMaxDegree{i,j};
-        isClusterHead = IsClusterHead{i,j};
-        edgeDelay = EdgeDelay{i,j};
-        nodesNum = size(am,2);
-        linkContri = zeros(1,nodesNum);
-        for k = 1:nodesNum
-            if isClusterHead(k) == 1
-                headIdx = k;
-                break;
-            end
-        end
-        
-        for k = 1:nodesNum
-            if k ~= headIdx
-                linkContri(k) = GetLinkContri(k,vertexMaxDegree(k),headIdx,am,...
-                    edgeDelay);
-            end
-        end
-        LinkContri{i,j} = linkContri;    
-    end
-end
 
 %模拟节点动态移动
 while true

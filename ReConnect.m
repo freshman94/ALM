@@ -5,8 +5,8 @@ function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,VertexPrior
 %%若节点脱离，尝试让节点重新连接
 %%策略：从am(i,j) == 0的结点中寻找最近的结点，并与其连接
 %%(1)若当前结点nodeIdx度超出，break
-%%(2)若最近的结点未超出MaxLinkDistance,但度超出，则尝试与下一个最近的结点相连
-%%(3)若最近结点已超出MaxLinkDistance，该结点无法重连，break
+%%(2)若最近结点已超出MaxLinkDistance，该结点无法重连，break
+%%(3)若最近的结点未超出MaxLinkDistance,但度超出，则应尝试断开某条无影响的链路
 %%(4)若与最近的结点相连，拓扑通，重连成功，break
 %%(5)若与最近结点相连，拓扑仍不通，则使最近的结点重复以上过程
 %%(6)若所有结点均已重复以上过程，重连过程结束
@@ -49,7 +49,7 @@ function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,VertexPrior
             Distance = inf;
             
             isRemoved = 0;
-            %表明是否可以有结点可连(仅当距离超出时，才不可连）
+            %表明是否有结点可连(仅当距离超出时，才不可连）
             isAccess = 0;
             NotConnectedNodesNum = size(sortedNodes,2);
             for p = 1:NotConnectedNodesNum
