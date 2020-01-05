@@ -23,13 +23,6 @@ function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,VertexPrior
         nodesNum = size(am,1);
         vertexMaxDegree = VertexMaxDegree_{ClusterIdx(1),ClusterIdx(2)};
         info = InterClusterInfo_{ClusterIdx(1),ClusterIdx(2)};
-%         for m = 1:nodesNum
-%             for n = 1:nodesNum
-%                 fprintf('am(%d,%d) = %d\t',m,n,am(m,n));
-%             end
-%             fprintf('\n');
-%         end
-%         fprintf('\n');
         for i = 1:nodesNum
             nodeDegree = sum(am(nodeIdx,:));
             nodeMaxDegree = vertexMaxDegree(nodeIdx);
@@ -131,13 +124,6 @@ function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,VertexPrior
                                 [~,cluster_visit_cur] = ClusterConnected(InterClusterInfo_,...
                                     RowCnt,ColCnt);
                                 if isequal(cluster_visit_pre,cluster_visit_cur) || (k == linkNum)
-%                                     for m = 1:nodesNum
-%                                         for n = 1:nodesNum
-%                                             fprintf('am(%d,%d) = %d\t',m,n,am(m,n));
-%                                         end
-%                                         fprintf('\n');
-%                                     end
-%                                     fprintf('\n');
 %                                     fprintf('Reconnect:Remove Inter Link([%d,%d]%d,[%d,%d]%d)\n',...
 %                                         ClusterIdx(1),ClusterIdx(2),linkIdx,linkCluster(1),...
 %                                         linkCluster(2),Cluster_linkIdx);
@@ -172,14 +158,6 @@ function [IsClusterHead,AM,EdgeDelay,VertexDelay,LDT,VertexStability,VertexPrior
             if isRemoved == 1 && isAccess == 1
                 am(nodeIdx,linkIdx) = 1;
                 am(linkIdx,nodeIdx) = 1;
-%                 fprintf('nodeIdx = %d,linkIdx = %d\n',nodeIdx,linkIdx);
-%                 for m = 1:nodesNum
-%                     for n = 1:nodesNum
-%                         fprintf('am(%d,%d) = %d\t',m,n,am(m,n));
-%                     end
-%                     fprintf('\n');
-%                 end
-%                 fprintf('\n');
                 NewEdgeDelay = 0.5*Distance/100000;
                 edgeDelay(nodeIdx,linkIdx) = NewEdgeDelay;
                 edgeDelay(linkIdx,nodeIdx) = edgeDelay(nodeIdx,linkIdx);
