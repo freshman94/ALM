@@ -4,7 +4,7 @@
 %loop
 %(2)mediatorB->headB
 %(3)mediatorB->mediatorC or headB->mediatorC
-function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
+function [tree,src,Break_branches] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
                     IsClusterHead_,Paths_,EdgeDelay_)
     [RowCnt,ColCnt] = size(IsClusterHead_);
     row = randi(RowCnt,1,1);
@@ -14,12 +14,13 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
     visit(row,col) = 1;
         
     tree = {};
+    Break_branches = {};
     src = [row,col];
 %     src
     %(1)src->mediatorA->mediatorB
-    [finish,visit,tree,next_clusters,next_mediators] = ...
+    [finish,visit,tree,next_clusters,next_mediators,Break_branches] = ...
         SrcToM(InterClusterInfo_,IsClusterHead_,Paths_,EdgeDelay_,...
-        ClusterMatrix_,visit,tree,src,AM_);
+        ClusterMatrix_,visit,tree,src,AM_,Break_branches);
     if finish == 1
        return; 
     end
@@ -50,9 +51,9 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
             %mediator是簇首
             if next_mediator == headIdx_
                 tree = [tree;next_cluster.';headIdx_];
-                [finish,visit,tree,nextClusters_,nextMediators_]...
+                [finish,visit,tree,nextClusters_,nextMediators_,Break_branches]...
                     = SrcToM(InterClusterInfo_,IsClusterHead_,Paths_,EdgeDelay_,...
-                    ClusterMatrix_,visit,tree,next_cluster.',AM_);
+                    ClusterMatrix_,visit,tree,next_cluster.',AM_,Break_branches);
                 if finish == 1
                    break; 
                 end
@@ -301,7 +302,8 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
                 end
             end
             if size(break_branches,1) ~= 0
-               tree = [tree;break_branches]; 
+               %tree = [tree;break_branches]; 
+               Break_branches = [Break_branches;break_branches];
             end
         end
         
@@ -314,9 +316,9 @@ function [tree,src] = ConstructMTree(ClusterMatrix_,AM_,InterClusterInfo_,...
 end
 
 %src->mediatorA->mediatorB
-function [finish,visit,tree,next_clusters,next_mediators]...
+function [finish,visit,tree,next_clusters,next_mediators,Break_branches]...
         = SrcToM(InterClusterInfo_,IsClusterHead_,Paths_,EdgeDelay_,...
-        ClusterMatrix_,visit_,tree_,src,AM_)
+        ClusterMatrix_,visit_,tree_,src,AM_,Break_branches_)
     isClusterHead = IsClusterHead_{src(1),src(2)};
     info = InterClusterInfo_{src(1),src(2)};
     path = Paths_{src(1),src(2)};
@@ -332,6 +334,8 @@ function [finish,visit,tree,next_clusters,next_mediators]...
     break_branches = {};
     interNodes = [];
     %interNodes是4阶矩阵，每一列包含的信息有:nodeIdx,link_clusterIdx,link_nodeIdx
+    %(1)若相邻簇的中间结点与簇首不通，则为该节点建立传输路径，存至break_branches
+    %(2)若相通，则记录该节点至interNodes
     for j = 1:nodesNum
        if info{1,j} == 1  
           clusters = info{2,j};
@@ -401,6 +405,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
         tree = tree_;
         next_clusters = [];
         next_mediators = [];
+        Break_branches = Break_branches_;
         return;
     end
     
@@ -417,7 +422,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
     isFreshed = 0;
     for j = 1:interNodesNum
         interNode = interNodes(:,j);
-        %簇首与相邻簇相连
+        %===============簇首与相邻簇相连===============
         if interNode(1) == headIdx
            interClusters(interNode(2),interNode(3)) = 1; 
            %若已存在与该簇的branch,并且interNode(4)与condidate(4)之间可达，更新
@@ -506,6 +511,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
                    tree = tree_;
                    next_clusters = [];
                    next_mediators = [];
+                   Break_branches = Break_branches_;
                    return;
                end
                break; 
@@ -529,6 +535,7 @@ function [finish,visit,tree,next_clusters,next_mediators]...
                    end
                 end
                 if canReach == 0
+                   error('==================================impossible\n'); 
                    condidates = [condidates,interNode];
                    branches = [branches,branch];
                    minHop = [minHop,[interNode(2),interNode(3),hop]'];
@@ -628,11 +635,13 @@ function [finish,visit,tree,next_clusters,next_mediators]...
     end
     
     if size(break_branches,1) ~= 0
-       tree_ = [tree_;break_branches];
+       %tree_ = [tree_;break_branches];
+       Break_branches_ = [Break_branches_;break_branches];
     end
     
     tree = tree_;
     visit = visit_;
+    Break_branches = Break_branches_;
 end
 
 %获取src->dst的最短路径，若无路径相通,path为[]

@@ -79,6 +79,7 @@ IsClusterHead = cell(RowCnt,ColCnt);
 Paths = cell(RowCnt,ColCnt);
 InterClusterInfo = cell(RowCnt,ColCnt);
 Tree = {};
+Break_branches = {};
 Src = 0;
 
 %初始时间
@@ -299,7 +300,7 @@ while true
 %             fprintf('\n==========================================\n');
         end
     end
-    [Tree,Src] = ConstructMTree(ClusterMatrix,AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
+    [Tree,Src,Break_branches] = ConstructMTree(ClusterMatrix,AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
     Src
     Tree
     cnt = size(Tree,1);
@@ -373,6 +374,7 @@ while true
         end
     end
     Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead);
+    Break_plot(ClusterMatrix,Break_branches);
 end
     
 end
@@ -380,7 +382,7 @@ end
 %用于绘制网络拓扑的函数
 function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPriority,...
                     ClusterIdx,path,interCluserInfo)
-    Colors = ['g','b','c','k'];
+    Colors = ['g','b','c','m'];
     num = size(Colors,2);
     Idx = mod(2*ClusterIdx(1) + ClusterIdx(2),num); 
     if Idx == 0
@@ -407,7 +409,7 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
     for i = 1:(nodesNum-1)
         for j = (i+1):nodesNum
             if am(i,j) == 1
-                plot([Cluster(2,i),Cluster(2,j)],[Cluster(3,i),Cluster(3,j)],color);
+                plot([Cluster(2,i),Cluster(2,j)],[Cluster(3,i),Cluster(3,j)],'k');
                 hold on;
             end
         end
@@ -424,7 +426,7 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
                 linkCluster = ClusterMatrix{linkClusterIdx(1),linkClusterIdx(2)};
                 linkIdx = linkIdxs(j);
                 plot([Cluster(2,i),linkCluster(2,linkIdx)],[Cluster(3,i),...
-                    linkCluster(3,linkIdx)],'r-');
+                    linkCluster(3,linkIdx)],'y');
             end
         end
     end
@@ -432,9 +434,11 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
     pathNum = size(path,2);
     for p = 1:pathNum
         if path(1,p) > 0
-            [x,y] = GetArrow([Cluster(2,path(1,p)),Cluster(3,path(1,p))],...
-                [Cluster(2,path(2,p)),Cluster(3,path(2,p))],BorderLength,[0.6,0.6]);
-            plot(x,y,color);
+            plot([Cluster(2,path(1,p)),Cluster(2,path(2,p))],...
+                [Cluster(3,path(1,p)),Cluster(3,path(2,p))],color);
+%             [x,y] = GetArrow([Cluster(2,path(1,p)),Cluster(3,path(1,p))],...
+%                 [Cluster(2,path(2,p)),Cluster(3,path(2,p))],BorderLength,[0.6,0.6]);
+%             plot(x,y,color);
         end
     end
     
@@ -470,6 +474,7 @@ function Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead)
            for j = 1:(nodeNum-1)
                src = [cluster(2,path(j)),cluster(3,path(j))];
                dst = [cluster(2,path(j+1)),cluster(3,path(j+1))];
+%                plot([src(1),dst(1)],[src(2),dst(2)],'r--');
                [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
                plot(x,y,'r');
            end
@@ -479,8 +484,43 @@ function Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead)
            cluster_2 = ClusterMatrix{clusterIdx(2,1),clusterIdx(2,2)};
            src = [cluster_1(2,path(1)),cluster_1(3,path(1))];
            dst = [cluster_2(2,path(2)),cluster_2(3,path(2))];
+%            plot([src(1),dst(1)],[src(2),dst(2)],'r--');
            [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
            plot(x,y,'r');
+       end
+    end
+end
+
+%绘制脱离部分传输路径
+function Break_plot(ClusterMatrix,Break_branches)    
+    num = size(Break_branches,1);
+    for i = 1:2:(num-1)
+       clusterIdx =  Break_branches{i};
+       clusterNum = size(clusterIdx,1);
+       path = Break_branches{i+1};
+       %簇内
+       if clusterNum == 1
+           cluster = ClusterMatrix{clusterIdx(1),clusterIdx(2)};
+           nodeNum = size(path,2);
+           if nodeNum == 1
+               continue;
+           end
+           for j = 1:(nodeNum-1)
+               src = [cluster(2,path(j)),cluster(3,path(j))];
+               dst = [cluster(2,path(j+1)),cluster(3,path(j+1))];
+               plot([src(1),dst(1)],[src(2),dst(2)],'y:');
+%                [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
+%                plot(x,y,'r');
+           end
+       %簇间
+       elseif clusterNum == 2
+           cluster_1 = ClusterMatrix{clusterIdx(1,1),clusterIdx(1,2)};
+           cluster_2 = ClusterMatrix{clusterIdx(2,1),clusterIdx(2,2)};
+           src = [cluster_1(2,path(1)),cluster_1(3,path(1))];
+           dst = [cluster_2(2,path(2)),cluster_2(3,path(2))];
+           plot([src(1),dst(1)],[src(2),dst(2)],'y:');
+%            [x,y] = GetArrow(src,dst,BorderLength,[0.3,0.3]);
+%            plot(x,y,'r');
        end
     end
 end
