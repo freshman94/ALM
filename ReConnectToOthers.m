@@ -85,6 +85,8 @@ function [IsClusterHead,VertexPriority,InterClusterInfo]...
 %                         linkIdxs
                         linkNum = size(linkClusters,2);
                         for k = 1:linkNum
+                            linkClusters = linkInfo_{2,linkIdx};
+                            linkIdxs = linkInfo_{3,linkIdx};
                             linkCluster = linkClusters(:,k);
                             cluster_linkIdx = linkIdxs(k);
                             linkClusters(:,k) = [];

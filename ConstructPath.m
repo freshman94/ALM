@@ -89,17 +89,18 @@ function [IndexMinPQ] = PQchange(IndexMinPQ_,idx,nodeIdx,priority)
 end
 
 function [IndexMinPQ] = PQup(IndexMinPQ_)
-    num = size(IndexMinPQ_,2);
-    if num > 1
-        IndexMinPQ_2 = IndexMinPQ_(2,:);
-        IndexMinPQ_2_sort = sort(IndexMinPQ_2);
-        pos = find(IndexMinPQ_2==IndexMinPQ_2_sort(1));
-        tmp = IndexMinPQ_(:,1);
-        IndexMinPQ_(:,1) = IndexMinPQ_(:,pos);
-        IndexMinPQ_(:,pos) = tmp;
-    end
-    
-    IndexMinPQ = IndexMinPQ_; 
+%     num = size(IndexMinPQ_,2);
+%     if num > 1
+%         IndexMinPQ_2 = IndexMinPQ_(2,:);
+%         IndexMinPQ_2_sort = sort(IndexMinPQ_2);
+%         pos = find(IndexMinPQ_2==IndexMinPQ_2_sort(1));
+%         tmp = IndexMinPQ_(:,1);
+%         IndexMinPQ_(:,1) = IndexMinPQ_(:,pos);
+%         IndexMinPQ_(:,pos) = tmp;
+%     end
+    IndexMinPQ_ = IndexMinPQ_';
+    IndexMinPQ_ = sortrows(IndexMinPQ_,2);
+    IndexMinPQ = IndexMinPQ_'; 
 end
 
 function [idx] = PQcontain(IndexMinPQ,nodeIdx)

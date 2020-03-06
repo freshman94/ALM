@@ -6,7 +6,7 @@
 3.链路时延等于节点距离除以三分之二光速，更加符合实际情况
 %}
 
-function [Sxy,AM,EdgeDelay,VertexDelay,ClusterMatrix]=cluster_topology(BorderLength,NodeAmount, ...
+function [AP2PD,HDF,Sxy,AM,EdgeDelay,VertexDelay,ClusterMatrix]=cluster_topology(K,BorderLength,NodeAmount, ...
 Alpha,Beta,VertexDegreeDUB,VertexSpeedDUB,VertexDirecDUB)
 %% 输入参数列表
 %BorderLength————正方形区域的边长，单位：km
@@ -29,8 +29,8 @@ NN = 10*NodeAmount;
 SSxy = zeros(NN,2);
 
 %簇参数
-K = 5;
-ClusterNodes = 2*K;    %簇内节点个数
+% K = 5;
+ClusterNodes = K;    %簇内节点个数
 Clusters = NodeAmount / ClusterNodes;   %簇数量
 RowCnt = floor(sqrt(Clusters));
 ColCnt = floor(Clusters / RowCnt);
@@ -81,10 +81,15 @@ InterClusterInfo = cell(RowCnt,ColCnt);
 Tree = {};
 Break_branches = {};
 Src = 0;
+HDF = 0;
+AP2PD = 0;
+t1_rcv = [];
 
 %初始时间
 t_pos = clock;
 t_vd = clock;
+t0 = clock;
+t1_break = [];
 
 %分簇(Cluster包含的信息有：序号，节点坐标，节点速度，节点方向,节点所属的簇编号)
 for i = 1:NodeAmount
@@ -302,7 +307,6 @@ while true
     end
     [Tree,Src,Break_branches] = ConstructMTree(ClusterMatrix,AM,InterClusterInfo,IsClusterHead,Paths,EdgeDelay);
     Src
-    Tree
     cnt = size(Tree,1);
     for j = 1:cnt
        Tree{j} 
@@ -353,7 +357,6 @@ while true
     
     %绘制动图
     drawnow;
-%     set(gcf,'Units','centimeter','Position',[5 5 50 50]); %设置图片大小
     F=getframe(gcf);
     I=frame2im(F);
     [I,map]=rgb2ind(I,256);
@@ -363,8 +366,8 @@ while true
         imwrite(I,map,'E:\simulation\topology.gif','gif','WriteMode','append','DelayTime',0.2);
     end
     pic_num = pic_num + 1;
-    hold off;
     
+    figure(1);
     for i = 1:RowCnt
         for j = 1:ColCnt
             Cluster = ClusterMatrix{i,j};
@@ -375,8 +378,105 @@ while true
     end
     Tree_plot(BorderLength,ClusterMatrix,Tree,Src,IsClusterHead);
     Break_plot(ClusterMatrix,Break_branches);
-end
+    hold off;
+
+    %统计簇首脱离频率
+%     [HDF] = GetHdf(AM,RowCnt,ColCnt,IsClusterHead,HDF);
+%     t1 = etime(clock,t0);
+%     if t1 > 10
+%         break;
+%     end
+    %统计组播树恢复时间
+    [t1_break,t1_rcv] = GetTRT(InterClusterInfo,RowCnt,ColCnt,t1_break,t1_rcv);
+    if size(t1_rcv,2) >= 1
+        t1_rcv
+        break;
+    end
     
+end
+    %统计平均端到端时延
+%     [AP2PD] = GetAp2pd(Paths,EdgeDelay,IsClusterHead,RowCnt,ColCnt);
+end
+
+function [t1_break,t1_rcv] = GetTRT(InterClusterInfo,RowCnt,ColCnt,t1_break_,t1_rcv_)
+    isConnected = ClusterConnected(InterClusterInfo,RowCnt,ColCnt);
+    if isConnected == 0
+        if isempty(t1_break_)
+            t1_break_ = clock;
+        end
+    elseif isConnected == 1
+        if isempty(t1_break_) == 0
+            t = etime(clock,t1_break_);
+            t1_rcv_ = [t1_rcv_,t];
+            t1_break_ = [];
+        end
+    end
+    t1_break = t1_break_;
+    t1_rcv = t1_rcv_;
+end
+
+function [AP2PD] = GetAp2pd(Paths,EdgeDelay,IsClusterHead,RowCnt,ColCnt)
+    Delay = 0;
+    for i = 1:RowCnt
+        for j = 1:ColCnt
+            delay = 0;
+            cnt = 0;
+            paths = Paths{i,j};
+            edgeDelay = EdgeDelay{i,j};
+            isClusterHead = IsClusterHead{i,j};
+            nodesNum = size(isClusterHead,2);
+            for k = 1:nodesNum
+                if isClusterHead(k) == 1
+                    headIdx = k;
+                end
+            end
+            P2P_paths = cell(nodesNum,1);
+            P2P_paths{headIdx} = 0;
+            for k = 1:nodesNum
+                if k == headIdx
+                    continue;
+                end
+                P2P_path = paths(:,k);
+                link = paths(:,k);
+                while true
+                    if link(1) == 0
+                        P2P_paths{k} = 0;
+                        break;
+                    end
+                    delay = delay + edgeDelay(P2P_path(1),P2P_path(2));
+                    if link(1) == headIdx
+                       P2P_paths{k} = P2P_path; 
+                       cnt = cnt + 1;
+                       break;
+                    end
+                    link = paths(:,link(1));
+                    P2P_path = [link(1);P2P_path];
+                end
+            end
+            Delay = Delay + delay/cnt;
+        end
+    end
+    AP2PD = Delay/(RowCnt*ColCnt);
+end
+
+function [HDF] = GetHdf(AM,RowCnt,ColCnt,IsClusterHead,HDF_)
+    for i = 1:RowCnt
+        for j = 1:ColCnt
+            isClusterHead = IsClusterHead{i,j};
+            am = AM{i,j};
+            nodesNum = size(isClusterHead,2);
+            for k = 1:nodesNum
+               if isClusterHead(k) == 1
+                   headIdx = k;
+               end
+            end
+            [~,MostConnected] = CheckConnected(am,headIdx,inf);
+            if MostConnected ~= 1
+                HDF_ = HDF_+1;
+            end
+        end
+    end
+    HDF = HDF_;
 end
 
 %用于绘制网络拓扑的函数
@@ -441,7 +541,6 @@ function Net_plot(BorderLength,nodesNum,ClusterMatrix,am,isClusterHead,vertexPri
 %             plot(x,y,color);
         end
     end
-    
     hold on;     
 end
 

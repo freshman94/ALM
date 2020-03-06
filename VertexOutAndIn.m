@@ -22,7 +22,7 @@ function [InterClusterInfo] = VertexOutAndIn(ClusterMatrix,MaxLinkDistance,...
     end
     
     %ต๗สิ
-    fprintf('clusterIdx=[%d,%d],nodeIdx = %d\n',ClusterIdx(1),ClusterIdx(2),nodeIdx);
+%     fprintf('clusterIdx=[%d,%d],nodeIdx = %d\n',ClusterIdx(1),ClusterIdx(2),nodeIdx);
 
     row = min(max(ceil(10 * nodePos(3)/(BorderLength*RowBase)),1),RowCnt);
     col = min(max(ceil(10 * nodePos(2)/(BorderLength * ColBase)),1),ColCnt);
@@ -66,8 +66,8 @@ function [InterClusterInfo] = VertexOutAndIn(ClusterMatrix,MaxLinkDistance,...
         end
         
         if Distance < MaxLinkDistance
-            fprintf('===========================NodeJoin===========================\n');
-            fprintf('join cluster[%d,%d],linkIdx = %d\n',row,col,linkIdx);
+%             fprintf('===========================NodeJoin===========================\n');
+%             fprintf('join cluster[%d,%d],linkIdx = %d\n',row,col,linkIdx);
             
             infoOut{1,nodeIdx} = 1;
             infoOut{2,nodeIdx} = [infoOut{2,nodeIdx},[row,col]'];

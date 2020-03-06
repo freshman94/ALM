@@ -505,7 +505,7 @@ function [finish,visit,tree,next_clusters,next_mediators,Break_branches]...
             if up == 0
                %所有interNode均不能与簇首相通
                if size(condidates,2) == 0 && j == interNodesNum
-                   fprintf('==================src broke===============\n');
+%                    fprintf('==================src broke===============\n');
                    finish  = 1;
                    visit = visit_;
                    tree = tree_;
@@ -549,6 +549,7 @@ function [finish,visit,tree,next_clusters,next_mediators,Break_branches]...
                    minHop = [minHop,[interNode(2),interNode(3),hop]'];
                else
                    %获取至该附近簇的最小跳数
+                   min_hop = 0;
                    minHopNum = size(minHop,2);
                    for k = 1:minHopNum
                       if minHop(1,k) == interNode(2) && minHop(2,k) == interNode(3)
@@ -727,17 +728,18 @@ function [IndexMinPQ] = PQchange(IndexMinPQ_,idx,nodeIdx,priority)
 end
 
 function [IndexMinPQ] = PQup(IndexMinPQ_)
-    num = size(IndexMinPQ_,2);
-    if num > 1
-        IndexMinPQ_2 = IndexMinPQ_(2,:);
-        IndexMinPQ_2_sort = sort(IndexMinPQ_2);
-        pos = find(IndexMinPQ_2==IndexMinPQ_2_sort(1));
-        tmp = IndexMinPQ_(:,1);
-        IndexMinPQ_(:,1) = IndexMinPQ_(:,pos);
-        IndexMinPQ_(:,pos) = tmp;
-    end
-    
-    IndexMinPQ = IndexMinPQ_; 
+%     num = size(IndexMinPQ_,2);
+%     if num > 1
+%         IndexMinPQ_2 = IndexMinPQ_(2,:);
+%         IndexMinPQ_2_sort = sort(IndexMinPQ_2);
+%         pos = find(IndexMinPQ_2==IndexMinPQ_2_sort(1));
+%         tmp = IndexMinPQ_(:,1);
+%         IndexMinPQ_(:,1) = IndexMinPQ_(:,pos);
+%         IndexMinPQ_(:,pos) = tmp;
+%     end
+    IndexMinPQ_ = IndexMinPQ_';
+    IndexMinPQ_ = sortrows(IndexMinPQ_,2);
+    IndexMinPQ = IndexMinPQ_'; 
 end
 
 function [idx] = PQcontain(IndexMinPQ,nodeIdx)

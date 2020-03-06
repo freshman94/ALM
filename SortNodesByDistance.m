@@ -11,23 +11,31 @@ function [sortedNodes] = SortNodesByDistance(NotIn,targetNodePos,ClusterMatrix_,
     nodeNum = size(nodes,2);
     %不包括targeNode的结点数量
     otherNodesNum = nodeNum+NotIn-1;
-    nodesWithD = [];
+    nodesWithD = zeros(otherNodesNum,2);
+    j = 1;
     for i = 1:nodeNum
         if NotIn == 1 || targetNodePos(1) ~= nodes(i)
             distance = ( (targetNodePos(2)-Cluster(2,nodes(i)))^2 +...
                         (targetNodePos(3)-Cluster(3,nodes(i)))^2)^0.5;
-            nodesWithD = [nodesWithD,[nodes(i),distance]'];
+            nodesWithD(j,:) = [nodes(i),distance];
+            j = j + 1;
         end
     end
     
-    sortedNodes = [];
-    if otherNodesNum > 0
-        distanceRow = nodesWithD(2,:);
-        sortedNodesWithD = sort(distanceRow);
-        sortedNodes = zeros(2,otherNodesNum);
-        for i = 1:otherNodesNum
-            pos = find(distanceRow==sortedNodesWithD(i));
-            sortedNodes(:,i) = nodesWithD(:,pos);
-        end
-    end
+    sortedNodes = sortrows(nodesWithD,2);
+    sortedNodes = sortedNodes';
+    
+%     sortedNodes = zeros(2,otherNodesNum);
+%     if otherNodesNum > 0
+%         distanceRow = nodesWithD(2,:);
+%         sortedNodesWithD = sort(distanceRow);
+%         sortedNodes = zeros(2,otherNodesNum);
+%         for i = 1:otherNodesNum
+%             pos = find(distanceRow==sortedNodesWithD(i));
+%             if isempty(pos) || size(pos,2) ~= 1
+%                 error('pos empty\n');
+%             end
+%             sortedNodes(:,i) = nodesWithD(:,pos);
+%         end
+%     end
 end
